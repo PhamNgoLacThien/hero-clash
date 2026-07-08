@@ -626,8 +626,9 @@ function drawCharSelect(ctx, sel, mx, my) {
         ctx.fillText(side.label, side.cx, 80);
 
         if (side.selected) {
-            const sk = SKINS[side.selected][getEquipped(side.selected)];
+            const sk = SKINS[side.selected]?.[getEquipped(side.selected)] || SKINS[side.selected][0];
             const pX = side.cx - (side.selected === 'warrior' ? 29 : 22)*2.2;
+
             const pY = 110;
             drawSegmentedChar(
                 ctx,
@@ -796,8 +797,9 @@ function drawShop(ctx, shopState, mx, my) {
         btns[`tab_${ctype}`]={x:tx,y:ty,w:tw,h:th};
     });
 
-    const skins  = SKINS[shopState.tab];
+    const skins  = SKINS[shopState.tab] || [];
     const equipped = getEquipped(shopState.tab);
+
     skins.forEach((sk, si) => {
         const cols = 2;
         const cardW=260, cardH=160, pad=30;

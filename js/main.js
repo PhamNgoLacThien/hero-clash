@@ -49,11 +49,12 @@ function startBattle(data) {
     const p1 = new Character(160, GROUND_Y - def1.height, p1Type, false);
     const p2 = new Character(CANVAS_W - 160 - def2.width, GROUND_Y - def2.height, p2Type, p2IsAI);
 
-    // Apply skins
-    const sk1 = SKINS[p1Type][getEquipped(p1Type)];
-    const sk2 = SKINS[p2Type][getEquipped(p2Type)];
+    // Apply skins safely with fallbacks
+    const sk1 = SKINS[p1Type]?.[getEquipped(p1Type)] || SKINS[p1Type][0];
+    const sk2 = SKINS[p2Type]?.[getEquipped(p2Type)] || SKINS[p2Type][0];
     p1.primaryColor = sk1.primary; p1.accentColor = sk1.accent;
     p2.primaryColor = sk2.primary; p2.accentColor = sk2.accent;
+
 
     stateData = {
         ...data, p1, p2,
