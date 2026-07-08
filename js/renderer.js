@@ -10,19 +10,18 @@ function initStars(canvasW, canvasH) {
     stars = [];
     for (let i = 0; i < 160; i++) {
         stars.push({
-            x:       Math.random() * canvasW,
-            y:       Math.random() * canvasH * 0.7,
-            size:    Math.random() * 1.6 + 0.3,
+            x:         Math.random() * canvasW,
+            y:         Math.random() * canvasH * 0.7,
+            size:      Math.random() * 1.6 + 0.3,
             baseAlpha: Math.random() * 0.55 + 0.2,
-            phase:   Math.random() * Math.PI * 2,
-            speed:   Math.random() * 0.025 + 0.008,
+            phase:     Math.random() * Math.PI * 2,
+            speed:     Math.random() * 0.025 + 0.008,
         });
     }
 }
 
 // ── Background ─────────────────────────────────────────────
 function drawBackground(ctx, canvasW, canvasH) {
-    // Sky gradient — deep space
     const sky = ctx.createLinearGradient(0, 0, 0, canvasH * 0.9);
     sky.addColorStop(0,    '#040412');
     sky.addColorStop(0.35, '#0a0a28');
@@ -41,81 +40,65 @@ function drawBackground(ctx, canvasW, canvasH) {
         ctx.fill();
     });
 
-    // Moon (crescent effect)
-    const moonX = canvasW * 0.83;
-    const moonY = 72;
-    const moonR = 36;
+    // Moon
+    const moonX = canvasW * 0.83, moonY = 72, moonR = 36;
     ctx.save();
-    // Glow halo
     const halo = ctx.createRadialGradient(moonX, moonY, moonR * 0.5, moonX, moonY, moonR * 2.2);
-    halo.addColorStop(0,   'rgba(255, 245, 180, 0.18)');
-    halo.addColorStop(0.5, 'rgba(220, 200, 120, 0.06)');
-    halo.addColorStop(1,   'rgba(200, 170, 80,  0)');
+    halo.addColorStop(0,   'rgba(255,245,180,0.18)');
+    halo.addColorStop(0.5, 'rgba(220,200,120,0.06)');
+    halo.addColorStop(1,   'rgba(200,170,80,0)');
     ctx.fillStyle = halo;
     ctx.beginPath();
     ctx.arc(moonX, moonY, moonR * 2.2, 0, Math.PI * 2);
     ctx.fill();
-    // Moon body
     ctx.beginPath();
     ctx.arc(moonX, moonY, moonR, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(252, 242, 190, 0.92)';
+    ctx.fillStyle = 'rgba(252,242,190,0.92)';
     ctx.fill();
-    // Crescent shadow
     ctx.beginPath();
     ctx.arc(moonX + 12, moonY - 4, moonR - 4, 0, Math.PI * 2);
     ctx.fillStyle = '#09091e';
     ctx.fill();
     ctx.restore();
 
-    // Distant mountain silhouettes
-    ctx.fillStyle = 'rgba(16, 8, 36, 0.82)';
+    // Mountain silhouettes
+    ctx.fillStyle = 'rgba(16,8,36,0.82)';
     ctx.beginPath();
-    ctx.moveTo(0,        canvasH * 0.58);
-    ctx.lineTo(90,       canvasH * 0.38);
-    ctx.lineTo(190,      canvasH * 0.52);
-    ctx.lineTo(310,      canvasH * 0.32);
-    ctx.lineTo(430,      canvasH * 0.48);
-    ctx.lineTo(560,      canvasH * 0.28);
-    ctx.lineTo(680,      canvasH * 0.44);
-    ctx.lineTo(820,      canvasH * 0.35);
-    ctx.lineTo(950,      canvasH * 0.50);
-    ctx.lineTo(1080,     canvasH * 0.38);
-    ctx.lineTo(1200,     canvasH * 0.47);
-    ctx.lineTo(canvasW,  canvasH * 0.58);
+    ctx.moveTo(0,       canvasH * 0.58);
+    ctx.lineTo(90,      canvasH * 0.38);
+    ctx.lineTo(190,     canvasH * 0.52);
+    ctx.lineTo(310,     canvasH * 0.32);
+    ctx.lineTo(430,     canvasH * 0.48);
+    ctx.lineTo(560,     canvasH * 0.28);
+    ctx.lineTo(680,     canvasH * 0.44);
+    ctx.lineTo(820,     canvasH * 0.35);
+    ctx.lineTo(950,     canvasH * 0.50);
+    ctx.lineTo(1080,    canvasH * 0.38);
+    ctx.lineTo(canvasW, canvasH * 0.58);
     ctx.closePath();
     ctx.fill();
-
-    // Faint aurora effect (purple/teal streaks near horizon)
-    const aurora = ctx.createLinearGradient(0, canvasH * 0.45, 0, canvasH * 0.62);
-    aurora.addColorStop(0,   'rgba(100, 40, 200, 0)');
-    aurora.addColorStop(0.4, 'rgba(80,  30, 160, 0.07)');
-    aurora.addColorStop(1,   'rgba(40,  10,  80, 0)');
-    ctx.fillStyle = aurora;
-    ctx.fillRect(0, canvasH * 0.45, canvasW, canvasH * 0.17);
 }
 
 // ── Ground ─────────────────────────────────────────────────
 function drawGround(ctx, canvasW, canvasH, groundY) {
-    // Purple glow above ground
     const glow = ctx.createLinearGradient(0, groundY - 30, 0, groundY + 5);
-    glow.addColorStop(0, 'rgba(130, 60, 255, 0)');
-    glow.addColorStop(1, 'rgba(130, 60, 255, 0.28)');
+    glow.addColorStop(0, 'rgba(130,60,255,0)');
+    glow.addColorStop(1, 'rgba(130,60,255,0.28)');
     ctx.fillStyle = glow;
     ctx.fillRect(0, groundY - 30, canvasW, 34);
 
-    // Ground fill
     const ground = ctx.createLinearGradient(0, groundY, 0, canvasH);
-    ground.addColorStop(0,   '#221535');
+    ground.addColorStop(0,    '#221535');
     ground.addColorStop(0.08, '#160e28');
-    ground.addColorStop(1,   '#0a0818');
+    ground.addColorStop(1,    '#0a0818');
     ctx.fillStyle = ground;
     ctx.fillRect(0, groundY, canvasW, canvasH - groundY);
 
-    // Glowing top edge
+    // Glowing edge
     ctx.save();
-    ctx.shadowColor = 'rgba(160, 80, 255, 1)';
+    ctx.shadowColor = 'rgba(160,80,255,1)';
     ctx.shadowBlur  = 18;
-    ctx.strokeStyle = 'rgba(170, 90, 255, 0.9)';
+    ctx.strokeStyle = 'rgba(170,90,255,0.9)';
     ctx.lineWidth   = 2;
     ctx.beginPath();
     ctx.moveTo(0, groundY);
@@ -123,8 +106,8 @@ function drawGround(ctx, canvasW, canvasH, groundY) {
     ctx.stroke();
     ctx.restore();
 
-    // Rune pattern along the ground
-    ctx.strokeStyle = 'rgba(140, 70, 255, 0.18)';
+    // Rune pattern
+    ctx.strokeStyle = 'rgba(140,70,255,0.18)';
     ctx.lineWidth   = 1;
     for (let rx = 60; rx < canvasW; rx += 110) {
         ctx.beginPath();
@@ -132,7 +115,6 @@ function drawGround(ctx, canvasW, canvasH, groundY) {
         ctx.lineTo(rx + 30, groundY + 4);
         ctx.lineTo(rx + 60, groundY + 12);
         ctx.stroke();
-        // Vertical tick at center
         ctx.beginPath();
         ctx.moveTo(rx + 30, groundY + 4);
         ctx.lineTo(rx + 30, groundY + 22);
@@ -140,15 +122,10 @@ function drawGround(ctx, canvasW, canvasH, groundY) {
     }
 }
 
-// ── Shadow under character ─────────────────────────────────
-function drawShadow(ctx, char, groundY) {
+// ── Draw Character — simple colored rectangle ──────────────
+function drawCharacter(ctx, char, groundY) {
+    // Drop shadow
     const heightAbove = groundY - char.feetY;
-    const scale = Math.max(0.15, 1 - heightAbove / 280);
-    const alpha = Math.max(0.04, 0.22 * scale);
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(
-        char.centerX, groundY - 3,
         char.width * 0.38 * scale, 7 * scale,
         0, 0, Math.PI * 2
     );
