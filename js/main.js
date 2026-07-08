@@ -50,10 +50,13 @@ function startBattle(data) {
     const p2 = new Character(CANVAS_W - 160 - def2.width, GROUND_Y - def2.height, p2Type, p2IsAI);
 
     // Apply skins safely with fallbacks
-    const sk1 = SKINS[p1Type]?.[getEquipped(p1Type)] || SKINS[p1Type][0];
-    const sk2 = SKINS[p2Type]?.[getEquipped(p2Type)] || SKINS[p2Type][0];
+    const sk1List = SKINS[p1Type] || SKINS['warrior'];
+    const sk1 = sk1List[getEquipped(p1Type)] || sk1List[0];
+    const sk2List = SKINS[p2Type] || SKINS['assassin'];
+    const sk2 = sk2List[getEquipped(p2Type)] || sk2List[0];
     p1.primaryColor = sk1.primary; p1.accentColor = sk1.accent;
     p2.primaryColor = sk2.primary; p2.accentColor = sk2.accent;
+
 
 
     stateData = {

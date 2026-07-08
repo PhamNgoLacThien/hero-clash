@@ -625,8 +625,9 @@ function drawCharSelect(ctx, sel, mx, my) {
         ctx.font='900 13px Inter'; ctx.textAlign='center'; ctx.fillStyle=side.color;
         ctx.fillText(side.label, side.cx, 80);
 
-        if (side.selected) {
-            const sk = SKINS[side.selected]?.[getEquipped(side.selected)] || SKINS[side.selected][0];
+        if (side.selected && CHAR_DEFS[side.selected] && SKINS[side.selected]) {
+            const skList = SKINS[side.selected];
+            const sk = skList[getEquipped(side.selected)] || skList[0];
             const pX = side.cx - (side.selected === 'warrior' ? 29 : 22)*2.2;
 
             const pY = 110;
@@ -656,10 +657,13 @@ function drawCharSelect(ctx, sel, mx, my) {
             ctx.fillText('SKILLSET:', side.cx, 365);
             def.skills.forEach((sid, si) => {
                 const sinfo = SKILL_DEFS[sid];
-                ctx.fillStyle='#fff'; ctx.font='11px Inter'; ctx.textAlign='center';
-                ctx.fillText(`${sinfo.icon} ${sinfo.name} — ${sinfo.desc}`, side.cx, 382 + si*15);
+                if (sinfo) {
+                    ctx.fillStyle='#fff'; ctx.font='11px Inter'; ctx.textAlign='center';
+                    ctx.fillText(`${sinfo.icon} ${sinfo.name} — ${sinfo.desc}`, side.cx, 382 + si*15);
+                }
             });
         }
+
 
         chars.forEach((ctype, ci) => {
             const def = CHAR_DEFS[ctype];
