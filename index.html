@@ -7,18 +7,37 @@
     <meta name="description" content="Hero Clash — Game đối kháng 2D với kỹ năng độc đáo. Chiến đấu, thể hiện kỹ năng và trở thành vô địch!">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <script>
+        window.addEventListener('error', function(e) {
+            const div = document.createElement('div');
+            div.style.position = 'fixed';
+            div.style.top = '0';
+            div.style.left = '0';
+            div.style.width = '100%';
+            div.style.background = 'rgba(255, 0, 0, 0.95)';
+            div.style.color = 'white';
+            div.style.padding = '20px';
+            div.style.fontFamily = 'monospace';
+            div.style.fontSize = '14px';
+            div.style.zIndex = '999999';
+            div.style.whiteSpace = 'pre-wrap';
+            div.innerHTML = '<strong>[JS ERROR]</strong> ' + e.message + '<br><strong>File:</strong> ' + e.filename + ':' + e.lineno + '<br><strong>Stack:</strong> ' + (e.error ? e.error.stack : 'N/A');
+            document.body.appendChild(div);
+        });
+    </script>
 </head>
 <body>
     <div id="wrap">
         <canvas id="gameCanvas"></canvas>
     </div>
-    <script src="js/input.js"></script>
-    <script src="js/save.js"></script>
-    <script src="js/data.js"></script>
-    <script src="js/chars.js"></script>
-    <script src="js/combat.js"></script>
-    <script src="js/fx.js"></script>
-    <script src="js/draw.js"></script>
-    <script src="js/main.js"></script>
+    <script src="js/input.js?v=1.3"></script>
+    <script src="js/save.js?v=1.3"></script>
+    <script src="js/data.js?v=1.3"></script>
+    <script src="js/chars.js?v=1.3"></script>
+    <script src="js/combat.js?v=1.3"></script>
+    <script src="js/fx.js?v=1.3"></script>
+    <script src="js/draw.js?v=1.3"></script>
+    <script src="js/main.js?v=1.3"></script>
+
 </body>
 </html>

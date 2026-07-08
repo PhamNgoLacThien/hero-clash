@@ -14,9 +14,17 @@ const Save = {
     load() {
         try {
             const raw = localStorage.getItem(this._key);
-            return raw ? { ...this.defaults(), ...JSON.parse(raw) } : this.defaults();
+            if (!raw) return this.defaults();
+            const parsed = JSON.parse(raw);
+            
+            // Bảo vệ nếu data cũ không có các trường mới (equipped, owned)
+            if (!parsed.equipped) parsed.equipped = this.defaults().equipped;
+            if (!parsed.owned) parsed.owned = this.defaults().owned;
+            
+            return { ...this.defaults(), ...parsed };
         } catch { return this.defaults(); }
     },
+
 
     save(data) {
         try { localStorage.setItem(this._key, JSON.stringify(data)); } catch {}
@@ -32,4 +40,8 @@ function spendGold(amount)      { saveData.gold = Math.max(0, saveData.gold - am
 function isSkinOwned(type, idx) { return saveData.owned[type]?.includes(idx); }
 function buySkin(type, idx)     { if (!saveData.owned[type]) saveData.owned[type] = [0]; saveData.owned[type].push(idx); Save.save(saveData); }
 function equipSkin(type, idx)   { saveData.equipped[type] = idx; Save.save(saveData); }
-function getEquipped(type)      { return saveData.equipped[type] ?? 0; }
+function getEquipped(type)      { 
+    if (!saveData || !saveData.equipped) return 0;
+    return saveData.equipped[type] ?? 0; 
+}
+

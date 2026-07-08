@@ -6,12 +6,16 @@ const ctx    = canvas.getContext('2d');
 canvas.width = CANVAS_W; canvas.height = CANVAS_H;
 
 function resizeCanvas() {
+    // Tính scale giữ tỉ lệ 2:1, fill màn hình tối đa
     const scW = window.innerWidth  / CANVAS_W;
     const scH = window.innerHeight / CANVAS_H;
-    // Fill toàn màn hình, giữ tỉ lệ 2:1 (letterbox nếu cần)
     const sc  = Math.min(scW, scH);
-    canvas.style.width  = (CANVAS_W * sc) + 'px';
-    canvas.style.height = (CANVAS_H * sc) + 'px';
+    const w   = Math.round(CANVAS_W * sc);
+    const h   = Math.round(CANVAS_H * sc);
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
+    // Fill phần còn lại bằng background của body
+    document.body.style.background = '#030310';
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
