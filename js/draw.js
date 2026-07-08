@@ -1,7 +1,26 @@
 // draw.js — ALL rendering: background, characters, HUD, and all screens
 
+// ── Polyfill for roundRect to ensure 100% compatibility with older browsers ──
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+        if (typeof r === 'undefined') r = 0;
+        if (Array.isArray(r)) r = r[0] || 0; // simple handling for array arguments
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        this.beginPath();
+        this.moveTo(x + r, y);
+        this.arcTo(x + w, y, x + w, y + h, r);
+        this.arcTo(x + w, y + h, x, y + h, r);
+        this.arcTo(x, y + h, x, y, r);
+        this.arcTo(x, y, x + w, y, r);
+        this.closePath();
+        return this;
+    };
+}
+
 // ── Stars (generated once) ─────────────────────────────────
 let stars = [];
+
 function initStars() {
     stars = Array.from({ length: 150 }, () => ({
         x: Math.random() * CANVAS_W, y: Math.random() * CANVAS_H * 0.7,
