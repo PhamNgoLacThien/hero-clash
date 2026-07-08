@@ -1,32 +1,26 @@
 // draw.js — ALL rendering: background, characters, HUD, and all screens
 
-// ── Polyfill for roundRect to ensure 100% compatibility with older browsers ──
-if (!CanvasRenderingContext2D.prototype.roundRect) {
-    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
-        if (typeof r === 'undefined') r = 0;
-        if (Array.isArray(r)) r = r[0] || 0; // simple handling for array arguments
-        if (w < 2 * r) r = w / 2;
-        if (h < 2 * r) r = h / 2;
-        this.beginPath();
-        this.moveTo(x + r, y);
-        this.arcTo(x + w, y, x + w, y + h, r);
-        this.arcTo(x + w, y + h, x, y + h, r);
-        this.arcTo(x, y + h, x, y, r);
-        this.arcTo(x, y, x + w, y, r);
-        this.closePath();
-        return this;
-    };
-}
-
 // ── Stars (generated once) ─────────────────────────────────
 let stars = [];
-
 function initStars() {
     stars = Array.from({ length: 150 }, () => ({
         x: Math.random() * CANVAS_W, y: Math.random() * CANVAS_H * 0.7,
         size: Math.random() * 1.5 + 0.3, base: Math.random() * 0.5 + 0.2,
         phase: Math.random() * Math.PI * 2, speed: Math.random() * 0.02 + 0.008,
     }));
+}
+
+// ── Polyfill/Helper for rounded rectangles (fully cross-browser safe) ──
+function drawRoundRect(ctx, x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
 }
 
 // ── Floating particles for background screens ─────────────
@@ -68,7 +62,6 @@ function btn(ctx, label, x, y, w, h, hovered, accent = '#8855ff') {
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    // Outer glow for hovered
     if (hovered) {
         ctx.shadowColor = accent;
         ctx.shadowBlur = 15;
@@ -79,11 +72,11 @@ function btn(ctx, label, x, y, w, h, hovered, accent = '#8855ff') {
     g.addColorStop(1, hovered ? darken(accent, 0.4) : '#1a0e30');
 
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+    drawRoundRect(ctx, x, y, w, h, 8); ctx.fill();
 
     ctx.strokeStyle = hovered ? '#ffffff' : accent;
     ctx.lineWidth = hovered ? 2 : 1.5;
-    ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.stroke();
+    drawRoundRect(ctx, x, y, w, h, 8); ctx.stroke();
 
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 15px Inter, sans-serif';
@@ -97,6 +90,7 @@ function btn(ctx, label, x, y, w, h, hovered, accent = '#8855ff') {
 
 function darken(hex, amt) {
     if (hex.startsWith('rgba')) return hex;
+    if (hex.startsWith('rgb')) return hex;
     const n = parseInt(hex.slice(1), 16);
     const r = Math.max(0, ((n >> 16) & 0xff) * (1 - amt));
     const g = Math.max(0, ((n >> 8)  & 0xff) * (1 - amt));
@@ -111,7 +105,6 @@ function title(ctx, text, x, y, size = 72, t = 0) {
     ctx.font = `900 ${size}px Cinzel, serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
-    // Metal 3D effect
     ctx.fillStyle = '#100a20';
     ctx.fillText(text, x + 3, y + 4);
 
@@ -202,14 +195,11 @@ function drawSegmentedChar(ctx, type, state, animTimer, stepTimer, activeSkill, 
     ctx.save();
     ctx.scale(scaleFactor, scaleFactor);
 
-    // Compute coordinate modifiers based on state
     const facing = facingRight ? 1 : -1;
     const time = animTimer;
 
-    // Breathe bobbing
     const bob = state === 'idle' ? Math.sin(time * 0.08) * 3 : 0;
 
-    // Running offsets (elliptical movement)
     let runPhase = stepTimer * 0.22;
     let feetOffset = { lx: -12, ly: 0, rx: 12, ry: 0 };
     let handsOffset = { lx: -18, ly: 0, rx: 18, ry: 0 };
@@ -232,7 +222,6 @@ function drawSegmentedChar(ctx, type, state, animTimer, stepTimer, activeSkill, 
         handsOffset.rx = 14;  handsOffset.ly = -4;
     }
 
-    // Attacking logic: Weapon swing rotation
     let weaponAngle = 0;
     let isAttacking = activeSkill !== null;
     let weaponScale = 1.0;
@@ -240,36 +229,30 @@ function drawSegmentedChar(ctx, type, state, animTimer, stepTimer, activeSkill, 
     if (isAttacking) {
         const sk = SKILL_DEFS[activeSkill.id];
         const progress = activeSkill.frame / sk.duration;
-        // Swing arc
         weaponAngle = -1.2 + progress * 2.8;
         handsOffset.rx = 18 + Math.cos(weaponAngle * 2) * 10;
         handsOffset.ry = -10 + Math.sin(weaponAngle * 2) * 10;
         if (progress < 0.4) weaponScale = 1.25;
     }
 
-    // Reference center of body
     const cx = x / scaleFactor + (width / 2);
     const cy = (y + bob) / scaleFactor + 38;
 
-    // Flipped canvas layout logic
     ctx.translate(cx, cy);
     ctx.scale(facing, 1);
 
-    // ── 1. DRAW BACK HAND / SHIELD (Warrior only) ──
+    // ── 1. DRAW BACK HAND / SHIELD ──
     if (type === 'warrior') {
         ctx.save();
         ctx.translate(handsOffset.lx, handsOffset.ly + 4);
-        // Golden round shield
         ctx.fillStyle = '#8b6914';
         ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2.5;
         ctx.stroke();
-        // Inner detail
         ctx.fillStyle = primaryColor;
         ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
     } else {
-        // Assassin back hand: small dagger
         ctx.save();
         ctx.translate(handsOffset.lx, handsOffset.ly + 2);
         ctx.rotate(-0.4);
@@ -277,30 +260,25 @@ function drawSegmentedChar(ctx, type, state, animTimer, stepTimer, activeSkill, 
         ctx.beginPath();
         ctx.moveTo(0, 0); ctx.lineTo(-4, -18); ctx.lineTo(4, -18);
         ctx.closePath(); ctx.fill();
-        // Handle
         ctx.fillStyle = '#222';
         ctx.fillRect(-2, 0, 4, 7);
         ctx.restore();
     }
 
-    // ── 2. DRAW BACK FOOT ──
+    // ── 2. DRAW BACK FOOT (Standard rect/circle for 100% compatibility) ──
     ctx.fillStyle = darken(primaryColor, 0.45);
     ctx.strokeStyle = darken(accentColor, 0.45);
     ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(feetOffset.lx - 7, 34 + feetOffset.ly, 13, 8, 4);
+    drawRoundRect(ctx, feetOffset.lx - 7, 34 + feetOffset.ly, 13, 8, 3);
     ctx.fill(); ctx.stroke();
 
     // ── 3. DRAW TORSO ──
     ctx.fillStyle = primaryColor;
     ctx.strokeStyle = accentColor;
     ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    // Shield shape torso
-    ctx.roundRect(-14, -12, 28, 36, 6);
+    drawRoundRect(ctx, -14, -12, 28, 36, 6);
     ctx.fill(); ctx.stroke();
 
-    // Chest detail
     ctx.fillStyle = 'rgba(255,255,255,0.15)';
     ctx.fillRect(-10, -8, 20, 8);
 
@@ -308,8 +286,7 @@ function drawSegmentedChar(ctx, type, state, animTimer, stepTimer, activeSkill, 
     ctx.fillStyle = primaryColor;
     ctx.strokeStyle = accentColor;
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(feetOffset.rx - 7, 34 + feetOffset.ry, 13, 8, 4);
+    drawRoundRect(ctx, feetOffset.rx - 7, 34 + feetOffset.ry, 13, 8, 3);
     ctx.fill(); ctx.stroke();
 
     // ── 5. DRAW HEAD ──
@@ -317,21 +294,15 @@ function drawSegmentedChar(ctx, type, state, animTimer, stepTimer, activeSkill, 
     ctx.translate(0, -28);
 
     if (type === 'warrior') {
-        // Helmet head
         ctx.fillStyle = primaryColor;
         ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = accentColor; ctx.lineWidth = 2.5;
         ctx.stroke();
-
-        // Visor slit
         ctx.fillStyle = '#0d1a2e';
         ctx.fillRect(2, -3, 13, 5);
-
-        // Eye glow
         ctx.fillStyle = '#80d0ff';
         ctx.fillRect(7, -2, 5, 3);
 
-        // Plume (feathers)
         ctx.fillStyle = '#d44000';
         ctx.beginPath();
         ctx.moveTo(-6, -13);
@@ -339,19 +310,14 @@ function drawSegmentedChar(ctx, type, state, animTimer, stepTimer, activeSkill, 
         ctx.bezierCurveTo(-2, -26, 0, -20, -6, -13);
         ctx.fill();
     } else {
-        // Hooded head
         ctx.fillStyle = '#4a1010';
         ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2;
         ctx.stroke();
-
-        // Mask face opening shadow
         ctx.fillStyle = '#100505';
         ctx.beginPath();
         ctx.arc(3, 1, 9, 0, Math.PI * 2);
         ctx.fill();
-
-        // Glowing red eyes
         ctx.fillStyle = '#ff3333';
         ctx.beginPath(); ctx.arc(4, -1, 2.5, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.arc(8, -1, 1.5, 0, Math.PI * 2); ctx.fill();
@@ -368,8 +334,6 @@ function drawSegmentedChar(ctx, type, state, animTimer, stepTimer, activeSkill, 
     }
 
     if (type === 'warrior') {
-        // Big broadsword
-        // Blade
         ctx.fillStyle = '#e8f0f8';
         ctx.beginPath();
         ctx.moveTo(-3, -8);
@@ -378,41 +342,30 @@ function drawSegmentedChar(ctx, type, state, animTimer, stepTimer, activeSkill, 
         ctx.lineTo(4, -46);
         ctx.lineTo(3, -8);
         ctx.closePath(); ctx.fill();
-        // Inner blade shine
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(-1, -48, 2, 38);
-
-        // Crossguard
         ctx.fillStyle = accentColor;
         ctx.fillRect(-9, -8, 18, 5);
-
-        // Hilt
         ctx.fillStyle = '#553311';
         ctx.fillRect(-2.5, -3, 5, 9);
     } else {
-        // Assassin primary dagger
         ctx.save();
         ctx.rotate(0.2);
-        // Blade
         ctx.fillStyle = '#b0c0d0';
         ctx.beginPath();
         ctx.moveTo(-3, 0); ctx.lineTo(-3, -26); ctx.lineTo(0, -32); ctx.lineTo(3, -26); ctx.lineTo(3, 0);
         ctx.closePath(); ctx.fill();
-        // Red glowing center line
         ctx.fillStyle = '#ff3333';
         ctx.fillRect(-0.5, -28, 1, 24);
-        // Guard
         ctx.fillStyle = accentColor;
         ctx.fillRect(-6, 0, 12, 3.5);
-        // Hilt
         ctx.fillStyle = '#222';
         ctx.fillRect(-2, 3.5, 4, 7);
         ctx.restore();
     }
+    ctx.restore();
 
-    ctx.restore(); // end front hand
-
-    // ── 7. ATTACK SLASH TRAIL (Visual effect during active hits) ──
+    // ── 7. ATTACK SLASH TRAIL ──
     if (isAttacking) {
         const sk = SKILL_DEFS[activeSkill.id];
         const progress = activeSkill.frame / sk.duration;
@@ -431,15 +384,13 @@ function drawSegmentedChar(ctx, type, state, animTimer, stepTimer, activeSkill, 
             ctx.restore();
         }
     }
-
-    ctx.restore(); // end flip & translate
+    ctx.restore();
 }
 
 // ── Draw wrapper for main battle ───────────────────────────
 function drawChar(ctx, char) {
     const x = char.x, y = char.y, w = char.width, h = char.height;
 
-    // Hurt flash / blink
     let renderPrimary = char.primaryColor;
     let renderAccent = char.accentColor;
 
@@ -448,21 +399,18 @@ function drawChar(ctx, char) {
         renderAccent = '#ffffff';
     }
 
-    // Shadow on ground
     const aH = GROUND_Y - char.feetY;
     const sc = Math.max(0.15, 1 - aH / 280);
     ctx.beginPath();
     ctx.ellipse(char.centerX, GROUND_Y - 3, w * 0.44 * sc, 6 * sc, 0, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(0,0,0,${Math.max(0.04, 0.25 * sc)})`; ctx.fill();
 
-    // Invincible shimmer indicator
     if (char.invincibleFrames > 0) {
         ctx.save();
         ctx.shadowColor = '#9b59b6';
         ctx.shadowBlur = 15;
     }
 
-    // Call Segmented Draw
     drawSegmentedChar(
         ctx,
         char.type,
@@ -480,10 +428,9 @@ function drawChar(ctx, char) {
         ctx.restore();
     }
 
-    // Status tints / indicators
     if (char.poison) {
         ctx.fillStyle = 'rgba(46,204,113,0.18)';
-        ctx.beginPath(); ctx.roundRect(char.x, char.y, char.width, char.height, 8); ctx.fill();
+        ctx.beginPath(); drawRoundRect(ctx, char.x, char.y, char.width, char.height, 8); ctx.fill();
     }
     if (char.buffs.damage) {
         if (Math.random() < 0.22) {
@@ -491,10 +438,9 @@ function drawChar(ctx, char) {
         }
     }
 
-    // Stagger star indicator
     if (char.staggerFrames > 0) {
         ctx.fillStyle = '#ffea00'; ctx.font = 'bold 15px Inter'; ctx.textAlign = 'center';
-        ctx.fillText('★', char.centerX, char.y + char.idleBob - 16);
+        ctx.fillText('★', char.centerX, char.y - 16);
     }
 }
 
@@ -504,25 +450,20 @@ function drawHPBar(ctx, char, x, y, w, flip) {
     const barH = 22;
     const innerW = (w - 4) * pct;
 
-    // Background panel (Glassmorphism border)
     ctx.fillStyle = 'rgba(15,10,25,0.78)';
-    ctx.beginPath(); ctx.roundRect(x, y, w, barH, 5); ctx.fill();
+    ctx.beginPath(); drawRoundRect(ctx, x, y, w, barH, 5); ctx.fill();
 
-    // HP color grading
     const hpColor = pct > 0.5 ? '#2ecc71' : pct > 0.25 ? '#f39c12' : '#e74c3c';
     ctx.fillStyle = hpColor;
     if (flip) ctx.fillRect(x + 2 + (w-4) - innerW, y + 2, innerW, barH - 4);
     else      ctx.fillRect(x + 2,                   y + 2, innerW, barH - 4);
 
-    // Border highlight
     ctx.strokeStyle = char.accentColor; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.roundRect(x, y, w, barH, 5); ctx.stroke();
+    ctx.beginPath(); drawRoundRect(ctx, x, y, w, barH, 5); ctx.stroke();
 
-    // HP Text
     ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Inter, sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(`${Math.ceil(char.hp)} / ${char.maxHp}`, x + w/2, y + barH/2 + 4);
 
-    // Fighter Title Info
     ctx.font = '900 15px Cinzel, serif'; ctx.fillStyle = char.accentColor; ctx.textAlign = flip ? 'right' : 'left';
     ctx.fillText(char.name.toUpperCase(), flip ? x + w : x, y - 6);
 }
@@ -541,10 +482,10 @@ function drawCooldowns(ctx, char, x, y, flip) {
         const by = y;
         const isActive = char.activeSkill?.id === sid;
 
-        ctx.fillStyle = 'rgba(10,5,20,0.85)'; ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 6); ctx.fill();
+        ctx.fillStyle = 'rgba(10,5,20,0.85)'; ctx.beginPath(); drawRoundRect(ctx, bx, by, boxW, boxH, 6); ctx.fill();
 
         if (cd === 0) {
-            ctx.fillStyle = 'rgba(120,60,255,0.18)'; ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 6); ctx.fill();
+            ctx.fillStyle = 'rgba(120,60,255,0.18)'; ctx.beginPath(); drawRoundRect(ctx, bx, by, boxW, boxH, 6); ctx.fill();
         }
 
         if (cd > 0) {
@@ -555,26 +496,23 @@ function drawCooldowns(ctx, char, x, y, flip) {
         if (isActive) {
             ctx.save(); ctx.shadowColor = sk.color; ctx.shadowBlur = 12;
             ctx.strokeStyle = sk.color; ctx.lineWidth = 2.5;
-            ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 6); ctx.stroke();
+            ctx.beginPath(); drawRoundRect(ctx, bx, by, boxW, boxH, 6); ctx.stroke();
             ctx.restore();
         } else {
             ctx.strokeStyle = cd === 0 ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)';
             ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 6); ctx.stroke();
+            ctx.beginPath(); drawRoundRect(ctx, bx, by, boxW, boxH, 6); ctx.stroke();
         }
 
-        // Icon
         ctx.fillStyle = cd === 0 ? '#fff' : '#666';
         ctx.font = 'bold 18px Inter'; ctx.textAlign = 'center';
         ctx.fillText(sk.icon || sk.key, bx + boxW/2, by + boxH/2 + 6);
 
-        // Timer text overlay
         if (cd > 0) {
             ctx.fillStyle = '#fff'; ctx.font = 'bold 11px Inter';
             ctx.fillText(Math.ceil(cd/60)+'s', bx + boxW/2, by + boxH - 4);
         }
 
-        // Tooltip shortcut key
         ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '9px Inter';
         ctx.fillText(sk.key, bx + boxW/2, by + boxH + 10);
     });
@@ -590,10 +528,9 @@ function drawHUD(ctx, p1, p2, timerFrames, round, p1Wins, p2Wins) {
     drawCooldowns(ctx, p1, barX1, 44, false);
     drawCooldowns(ctx, p2, barX2 + barW, 44, true);
 
-    // Round / Timer Panel
     const secs = Math.ceil(timerFrames / 60);
     ctx.fillStyle = 'rgba(15,10,25,0.7)';
-    ctx.beginPath(); ctx.roundRect(CANVAS_W/2 - 50, 10, 100, 52, 6); ctx.fill();
+    ctx.beginPath(); drawRoundRect(ctx, CANVAS_W/2 - 50, 10, 100, 52, 6); ctx.fill();
     ctx.strokeStyle = 'rgba(120,60,255,0.4)'; ctx.stroke();
 
     ctx.font = `bold ${secs <= 10 ? 30 : 26}px Cinzel, serif`;
@@ -604,7 +541,6 @@ function drawHUD(ctx, p1, p2, timerFrames, round, p1Wins, p2Wins) {
     ctx.font = 'bold 11px Inter'; ctx.fillStyle = 'rgba(200,180,255,0.6)';
     ctx.fillText(`ROUND ${round}`, CANVAS_W / 2, 50);
 
-    // Win Dots
     for (let i = 0; i < 2; i++) {
         const filled1 = i < p1Wins, filled2 = i < p2Wins;
         const dx = 22;
@@ -617,7 +553,6 @@ function drawHUD(ctx, p1, p2, timerFrames, round, p1Wins, p2Wins) {
 
 // ── Loading Screen ───────────────────────────────────────────
 function drawLoading(ctx, progress, t) {
-    // Deep galaxy gradient background
     const bg = ctx.createRadialGradient(CANVAS_W/2, CANVAS_H/2, 40, CANVAS_W/2, CANVAS_H/2, 650);
     bg.addColorStop(0, '#10062a');
     bg.addColorStop(1, '#02020a');
@@ -626,17 +561,15 @@ function drawLoading(ctx, progress, t) {
     updateMenuParticles();
     drawMenuParticles(ctx);
 
-    // 3D Title
     title(ctx, 'HERO CLASH', CANVAS_W/2, CANVAS_H/2 - 50, 80, t);
 
-    // Loading Bar
     const bw = 400, bh = 8, bx = (CANVAS_W-bw)/2, by = CANVAS_H/2 + 30;
-    ctx.fillStyle = '#0a0518'; ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 4); ctx.fill();
+    ctx.fillStyle = '#0a0518'; ctx.beginPath(); drawRoundRect(ctx, bx, by, bw, bh, 4); ctx.fill();
 
     const g = ctx.createLinearGradient(bx, by, bx + bw, by);
     g.addColorStop(0, '#8855ff'); g.addColorStop(1, '#f0a500');
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.roundRect(bx, by, bw*progress, bh, 4); ctx.fill();
+    ctx.beginPath(); drawRoundRect(ctx, bx, by, bw*progress, bh, 4); ctx.fill();
 
     ctx.fillStyle = 'rgba(200,180,255,0.5)'; ctx.font = '13px Inter, sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(`Loading… ${Math.round(progress*100)}%`, CANVAS_W/2, by + 30);
@@ -668,12 +601,10 @@ function drawMainMenu(ctx, mx, my, t) {
     return btns;
 }
 
-// ── Character Select (Giant Segmented Previews!) ────────────
+// ── Character Select ─────────────────────────────────────────
 function drawCharSelect(ctx, sel, mx, my) {
-    // Glassmorphism panels
     ctx.fillStyle='#04020a'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
 
-    // Stars background
     stars.forEach(s => {
         ctx.beginPath(); ctx.arc(s.x, s.y, s.size * 0.7, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(240,228,196,${s.base * 0.35})`; ctx.fill();
@@ -694,12 +625,10 @@ function drawCharSelect(ctx, sel, mx, my) {
         ctx.font='900 13px Inter'; ctx.textAlign='center'; ctx.fillStyle=side.color;
         ctx.fillText(side.label, side.cx, 80);
 
-        // Giant animated preview on the side
         if (side.selected) {
             const sk = SKINS[side.selected][getEquipped(side.selected)];
             const pX = side.cx - (side.selected === 'warrior' ? 29 : 22)*2.2;
             const pY = 110;
-            // Draw Giant Character Preview (scale = 2.2)
             drawSegmentedChar(
                 ctx,
                 side.selected,
@@ -707,7 +636,7 @@ function drawCharSelect(ctx, sel, mx, my) {
                 Date.now() / 16,
                 0,
                 null,
-                pi === 0, // P1 faces right, P2 faces left
+                pi === 0,
                 sk.primary,
                 sk.accent,
                 pX, pY,
@@ -716,14 +645,12 @@ function drawCharSelect(ctx, sel, mx, my) {
                 2.2
             );
 
-            // Display Title & Bio details
             const def = CHAR_DEFS[side.selected];
             ctx.font='900 22px Cinzel'; ctx.fillStyle='#fff';
             ctx.fillText(def.name, side.cx, 320);
             ctx.font='italic 12px Inter'; ctx.fillStyle='rgba(200,180,255,0.7)';
             ctx.fillText(def.title, side.cx, 338);
 
-            // Skills details layout
             ctx.font='bold 11px Inter'; ctx.fillStyle=side.color;
             ctx.fillText('SKILLSET:', side.cx, 365);
             def.skills.forEach((sid, si) => {
@@ -733,21 +660,19 @@ function drawCharSelect(ctx, sel, mx, my) {
             });
         }
 
-        // Selection Cards for choices (centered)
         chars.forEach((ctype, ci) => {
             const def = CHAR_DEFS[ctype];
             const cardW = 120, cardH = 50;
-            // Place choices towards the center
             const cardX = CANVAS_W/2 - cardW/2 + (pi === 0 ? -70 : 70);
             const cardY = 110 + ci * 60;
             const hovered = isOver(mx, my, cardX, cardY, cardW, cardH);
             const isSel = side.selected === ctype;
 
             ctx.fillStyle = isSel ? side.color + '33' : hovered ? 'rgba(120,60,255,0.2)' : 'rgba(20,10,40,0.6)';
-            ctx.beginPath(); ctx.roundRect(cardX, cardY, cardW, cardH, 6); ctx.fill();
+            ctx.beginPath(); drawRoundRect(ctx, cardX, cardY, cardW, cardH, 6); ctx.fill();
             ctx.strokeStyle = isSel ? side.color : hovered ? 'rgba(120,60,255,0.5)' : 'rgba(255,255,255,0.1)';
             ctx.lineWidth = isSel ? 2 : 1;
-            ctx.beginPath(); ctx.roundRect(cardX, cardY, cardW, cardH, 6); ctx.stroke();
+            ctx.beginPath(); drawRoundRect(ctx, cardX, cardY, cardW, cardH, 6); ctx.stroke();
 
             ctx.fillStyle = '#fff'; ctx.font = 'bold 14px Cinzel'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(def.name, cardX + cardW/2, cardY + cardH/2);
@@ -757,12 +682,11 @@ function drawCharSelect(ctx, sel, mx, my) {
         });
     });
 
-    // Glassmorphism panels for Difficulty & Map selection
     const panelX = CANVAS_W/2 - 190, panelY = 250, panelW = 380, panelH = 175;
     ctx.fillStyle = 'rgba(15,10,35,0.6)';
-    ctx.beginPath(); ctx.roundRect(panelX, panelY, panelW, panelH, 10); ctx.fill();
+    ctx.beginPath(); drawRoundRect(ctx, panelX, panelY, panelW, panelH, 10); ctx.fill();
     ctx.strokeStyle = 'rgba(120,60,255,0.2)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.roundRect(panelX, panelY, panelW, panelH, 10); ctx.stroke();
+    ctx.beginPath(); drawRoundRect(ctx, panelX, panelY, panelW, panelH, 10); ctx.stroke();
 
     // ── Difficulty ──
     ctx.font='bold 12px Inter'; ctx.fillStyle='rgba(200,180,255,0.7)'; ctx.textAlign='center';
@@ -775,9 +699,9 @@ function drawCharSelect(ctx, sel, mx, my) {
         const dc = d==='easy'?'#2ecc71':d==='medium'?'#f39c12':'#e74c3c';
 
         ctx.fillStyle = isSelD ? dc+'44' : hov ? dc+'22' : 'rgba(25,15,40,0.5)';
-        ctx.beginPath(); ctx.roundRect(dx,dy,dw,dh,5); ctx.fill();
+        ctx.beginPath(); drawRoundRect(ctx, dx,dy,dw,dh,5); ctx.fill();
         ctx.strokeStyle = isSelD ? dc : hov ? dc+'66' : 'rgba(255,255,255,0.1)';
-        ctx.beginPath(); ctx.roundRect(dx,dy,dw,dh,5); ctx.stroke();
+        ctx.beginPath(); drawRoundRect(ctx, dx,dy,dw,dh,5); ctx.stroke();
 
         ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Inter';
         ctx.fillText(AI_DIFFS[d].label, dx+dw/2, dy+dh/2+4);
@@ -792,16 +716,15 @@ function drawCharSelect(ctx, sel, mx, my) {
         const hov = isOver(mx,my,mx2,my2,mw,mh);
 
         ctx.fillStyle = isSelM ? 'rgba(136,85,255,0.35)' : hov ? 'rgba(136,85,255,0.15)' : 'rgba(25,15,40,0.5)';
-        ctx.beginPath(); ctx.roundRect(mx2,my2,mw,mh,4); ctx.fill();
+        ctx.beginPath(); drawRoundRect(ctx, mx2,my2,mw,mh,4); ctx.fill();
         ctx.strokeStyle = isSelM ? '#8855ff' : hov ? 'rgba(136,85,255,0.5)' : 'rgba(255,255,255,0.1)';
-        ctx.beginPath(); ctx.roundRect(mx2,my2,mw,mh,4); ctx.stroke();
+        ctx.beginPath(); drawRoundRect(ctx, mx2,my2,mw,mh,4); ctx.stroke();
 
         ctx.fillStyle = '#fff'; ctx.font = '10px Inter';
         ctx.fillText(map.name.split(' ')[0], mx2+mw/2, my2+mh/2+3);
         btns[`map_${map.id}`] = {x:mx2,y:my2,w:mw,h:mh};
     });
 
-    // Fight Action
     if (sel.p1 && sel.p2) {
         const rx=CANVAS_W/2-110, ry=440, rw=220, rh=46;
         btns.ready = btn(ctx,'⚔  START DUEL', rx,ry,rw,rh, isOver(mx,my,rx,ry,rw,rh), '#f0a500');
@@ -848,7 +771,7 @@ function drawGameOver(ctx, winnerLabel, winnerColor, p1Wins, p2Wins, goldEarned,
     return btns;
 }
 
-// ── Shop Screen Redesign ─────────────────────────────────────
+// ── Shop Screen ──────────────────────────────────────────────
 function drawShop(ctx, shopState, mx, my) {
     ctx.fillStyle='#04020a'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
 
@@ -865,9 +788,9 @@ function drawShop(ctx, shopState, mx, my) {
         const isActive = shopState.tab === ctype;
         const hov = isOver(mx,my,tx,ty,tw,th);
         ctx.fillStyle = isActive?'rgba(136,85,255,0.35)':hov?'rgba(136,85,255,0.15)':'rgba(20,10,40,0.7)';
-        ctx.beginPath(); ctx.roundRect(tx,ty,tw,th,6); ctx.fill();
+        ctx.beginPath(); drawRoundRect(ctx, tx,ty,tw,th,6); ctx.fill();
         ctx.strokeStyle=isActive?'#8855ff':'rgba(255,255,255,0.1)'; ctx.lineWidth=1.5;
-        ctx.beginPath(); ctx.roundRect(tx,ty,tw,th,6); ctx.stroke();
+        ctx.beginPath(); drawRoundRect(ctx, tx,ty,tw,th,6); ctx.stroke();
         ctx.fillStyle=isActive?'#fff':'rgba(200,180,255,0.6)'; ctx.font='bold 15px Cinzel'; ctx.textAlign='center';
         ctx.fillText(CHAR_DEFS[ctype].name, tx+tw/2, ty+th/2+5);
         btns[`tab_${ctype}`]={x:tx,y:ty,w:tw,h:th};
@@ -886,11 +809,10 @@ function drawShop(ctx, shopState, mx, my) {
         const hov   = isOver(mx,my,cx,cy,cardW,cardH);
 
         ctx.fillStyle = isEq?'rgba(136,85,255,0.25)':hov?'rgba(136,85,255,0.1)':'rgba(15,10,30,0.6)';
-        ctx.beginPath(); ctx.roundRect(cx,cy,cardW,cardH,8); ctx.fill();
+        ctx.beginPath(); drawRoundRect(ctx, cx,cy,cardW,cardH,8); ctx.fill();
         ctx.strokeStyle=isEq?sk.accent:owned?'rgba(255,255,255,0.15)':'rgba(255,255,255,0.05)'; ctx.lineWidth=isEq?2.5:1;
-        ctx.beginPath(); ctx.roundRect(cx,cy,cardW,cardH,8); ctx.stroke();
+        ctx.beginPath(); drawRoundRect(ctx, cx,cy,cardW,cardH,8); ctx.stroke();
 
-        // Premium skin preview drawing (using new segmented system)
         const pX = cx + 18;
         const pY = cy + 30;
         drawSegmentedChar(
@@ -900,7 +822,7 @@ function drawShop(ctx, shopState, mx, my) {
             Date.now() / 16 + si * 20,
             0,
             null,
-            true, // Always face right in preview card
+            true,
             sk.primary,
             sk.accent,
             pX, pY,
