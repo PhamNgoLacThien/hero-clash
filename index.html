@@ -2,26 +2,23 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Hero Clash — Coming Soon</title>
-    <style>
-        body {
-            margin: 0;
-            background: #0a0a0f;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            font-family: 'Segoe UI', sans-serif;
-            color: white;
-        }
-        h1 { font-size: 3rem; color: #f0a500; }
-        p  { color: #aaa; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hero Clash ⚔️</title>
+    <meta name="description" content="Hero Clash — Game đối kháng 2D. Điều khiển anh hùng với kỹ năng độc đáo để chiến thắng đối thủ.">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div style="text-align:center">
-        <h1>⚔️ Hero Clash</h1>
-        <p>Game đang được phát triển...</p>
+    <div id="gameWrapper">
+        <canvas id="gameCanvas"></canvas>
+        <div id="controls-hint">
+            <span id="hint-p1">⚔️ <strong>Warrior:</strong> [A] [D] Di chuyển &nbsp;|&nbsp; [W] Nhảy</span>
+            <span id="hint-p2">🗡️ <strong>Assassin:</strong> [←] [→] Di chuyển &nbsp;|&nbsp; [↑] Nhảy</span>
+        </div>
     </div>
+    <script src="js/input.js"></script>
+    <script src="js/characters.js"></script>
+    <script src="js/renderer.js"></script>
+    <script src="js/main.js"></script>
 </body>
 </html>
