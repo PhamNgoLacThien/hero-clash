@@ -9,7 +9,5 @@ html, body {
 #gameCanvas {
     display: block;
     cursor: pointer;
-    border: 2px solid rgba(140,70,255,0.35);
-    border-radius: 8px;
-    box-shadow: 0 0 40px rgba(120,50,255,0.2), 0 0 100px rgba(80,30,200,0.1);
+    /* Full screen — no border, no padding */
 }

@@ -6,10 +6,10 @@ const ctx    = canvas.getContext('2d');
 canvas.width = CANVAS_W; canvas.height = CANVAS_H;
 
 function resizeCanvas() {
-    const pad  = 20;
-    const maxW = window.innerWidth  - pad;
-    const maxH = window.innerHeight - pad;
-    const sc   = Math.min(maxW/CANVAS_W, maxH/CANVAS_H, 1);
+    const scW = window.innerWidth  / CANVAS_W;
+    const scH = window.innerHeight / CANVAS_H;
+    // Fill toàn màn hình, giữ tỉ lệ 2:1 (letterbox nếu cần)
+    const sc  = Math.min(scW, scH);
     canvas.style.width  = (CANVAS_W * sc) + 'px';
     canvas.style.height = (CANVAS_H * sc) + 'px';
 }
