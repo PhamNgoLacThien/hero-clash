@@ -10,26 +10,74 @@ function initStars() {
     }));
 }
 
+// ── Floating particles for background screens ─────────────
+let menuParticles = [];
+function updateMenuParticles() {
+    if (menuParticles.length < 35) {
+        menuParticles.push({
+            x: Math.random() * CANVAS_W,
+            y: CANVAS_H + 10,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: -Math.random() * 1.2 - 0.4,
+            size: Math.random() * 3 + 1,
+            color: Math.random() < 0.5 ? 'rgba(136, 85, 255, 0.4)' : 'rgba(240, 165, 0, 0.3)',
+            life: Math.random() * 300 + 100
+        });
+    }
+    menuParticles.forEach((p, idx) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        if (p.life <= 0 || p.x < 0 || p.x > CANVAS_W || p.y < -10) {
+            menuParticles.splice(idx, 1);
+        }
+    });
+}
+
+function drawMenuParticles(ctx) {
+    menuParticles.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
 // ── Utility ─────────────────────────────────────────────────
 function btn(ctx, label, x, y, w, h, hovered, accent = '#8855ff') {
     const alpha = hovered ? 1 : 0.75;
     ctx.save();
     ctx.globalAlpha = alpha;
+
+    // Outer glow for hovered
+    if (hovered) {
+        ctx.shadowColor = accent;
+        ctx.shadowBlur = 15;
+    }
+
     const g = ctx.createLinearGradient(x, y, x, y + h);
     g.addColorStop(0, hovered ? accent : '#2a1a4a');
     g.addColorStop(1, hovered ? darken(accent, 0.4) : '#1a0e30');
+
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); ctx.fill();
-    ctx.strokeStyle = accent; ctx.lineWidth = hovered ? 2 : 1;
-    ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 16px Inter'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.shadowColor = accent; ctx.shadowBlur = hovered ? 12 : 0;
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+
+    ctx.strokeStyle = hovered ? '#ffffff' : accent;
+    ctx.lineWidth = hovered ? 2 : 1.5;
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowBlur = 0;
     ctx.fillText(label, x + w / 2, y + h / 2);
     ctx.restore();
     return { x, y, w, h };
 }
 
 function darken(hex, amt) {
+    if (hex.startsWith('rgba')) return hex;
     const n = parseInt(hex.slice(1), 16);
     const r = Math.max(0, ((n >> 16) & 0xff) * (1 - amt));
     const g = Math.max(0, ((n >> 8)  & 0xff) * (1 - amt));
@@ -43,10 +91,18 @@ function title(ctx, text, x, y, size = 72, t = 0) {
     ctx.save();
     ctx.font = `900 ${size}px Cinzel, serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const glow = `rgba(180,100,255,${0.6 + 0.15 * Math.sin(t * 0.03)})`;
-    ctx.shadowColor = glow; ctx.shadowBlur = 40;
-    const g = ctx.createLinearGradient(x - 200, y, x + 200, y);
-    g.addColorStop(0, '#c0a0ff'); g.addColorStop(0.5, '#ffffff'); g.addColorStop(1, '#f0a500');
+
+    // Metal 3D effect
+    ctx.fillStyle = '#100a20';
+    ctx.fillText(text, x + 3, y + 4);
+
+    const glow = `rgba(136,85,255,${0.65 + 0.15 * Math.sin(t * 0.03)})`;
+    ctx.shadowColor = glow; ctx.shadowBlur = 35;
+
+    const g = ctx.createLinearGradient(x - 250, y, x + 250, y);
+    g.addColorStop(0, '#a27cff');
+    g.addColorStop(0.5, '#ffffff');
+    g.addColorStop(1, '#ffb834');
     ctx.fillStyle = g;
     ctx.fillText(text, x, y);
     ctx.restore();
@@ -87,12 +143,10 @@ function drawBackground(ctx, map) {
 
 // ── Ground ───────────────────────────────────────────────────
 function drawGround(ctx, map, platforms = []) {
-    // Glow above ground
     const gl = ctx.createLinearGradient(0, GROUND_Y - 28, 0, GROUND_Y + 4);
     gl.addColorStop(0, 'rgba(0,0,0,0)'); gl.addColorStop(1, map.glowColor);
     ctx.fillStyle = gl; ctx.fillRect(0, GROUND_Y - 28, CANVAS_W, 32);
 
-    // Ground fill
     const gf = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_H);
     gf.addColorStop(0, map.groundFill); gf.addColorStop(0.08, '#0f0a1e'); gf.addColorStop(1, '#080610');
     ctx.fillStyle = gf; ctx.fillRect(0, GROUND_Y, CANVAS_W, CANVAS_H - GROUND_Y);
@@ -124,68 +178,304 @@ function drawGround(ctx, map, platforms = []) {
     }
 }
 
-// ── Character (rectangle + status) ──────────────────────────
+// ── Segmented Brawlhalla/bandit.rip Character Render Engine ──
+function drawSegmentedChar(ctx, type, state, animTimer, stepTimer, activeSkill, facingRight, primaryColor, accentColor, x, y, width, height, scaleFactor = 1.0) {
+    ctx.save();
+    ctx.scale(scaleFactor, scaleFactor);
+
+    // Compute coordinate modifiers based on state
+    const facing = facingRight ? 1 : -1;
+    const time = animTimer;
+
+    // Breathe bobbing
+    const bob = state === 'idle' ? Math.sin(time * 0.08) * 3 : 0;
+
+    // Running offsets (elliptical movement)
+    let runPhase = stepTimer * 0.22;
+    let feetOffset = { lx: -12, ly: 0, rx: 12, ry: 0 };
+    let handsOffset = { lx: -18, ly: 0, rx: 18, ry: 0 };
+
+    if (state === 'running') {
+        const str = 14;
+        feetOffset.lx = Math.cos(runPhase) * str;
+        feetOffset.ly = Math.sin(runPhase) * 6;
+        feetOffset.rx = Math.cos(runPhase + Math.PI) * str;
+        feetOffset.ry = Math.sin(runPhase + Math.PI) * 6;
+
+        handsOffset.lx = Math.sin(runPhase) * 8 - 10;
+        handsOffset.ly = Math.cos(runPhase) * 3;
+        handsOffset.rx = Math.sin(runPhase + Math.PI) * 8 + 10;
+        handsOffset.ry = Math.cos(runPhase + Math.PI) * 3;
+    } else if (state === 'jumping' || state === 'falling') {
+        feetOffset.lx = -8; feetOffset.ly = 6;
+        feetOffset.rx = 8;  feetOffset.ry = 11;
+        handsOffset.lx = -14; handsOffset.ly = -8;
+        handsOffset.rx = 14;  handsOffset.ly = -4;
+    }
+
+    // Attacking logic: Weapon swing rotation
+    let weaponAngle = 0;
+    let isAttacking = activeSkill !== null;
+    let weaponScale = 1.0;
+
+    if (isAttacking) {
+        const sk = SKILL_DEFS[activeSkill.id];
+        const progress = activeSkill.frame / sk.duration;
+        // Swing arc
+        weaponAngle = -1.2 + progress * 2.8;
+        handsOffset.rx = 18 + Math.cos(weaponAngle * 2) * 10;
+        handsOffset.ry = -10 + Math.sin(weaponAngle * 2) * 10;
+        if (progress < 0.4) weaponScale = 1.25;
+    }
+
+    // Reference center of body
+    const cx = x / scaleFactor + (width / 2);
+    const cy = (y + bob) / scaleFactor + 38;
+
+    // Flipped canvas layout logic
+    ctx.translate(cx, cy);
+    ctx.scale(facing, 1);
+
+    // ── 1. DRAW BACK HAND / SHIELD (Warrior only) ──
+    if (type === 'warrior') {
+        ctx.save();
+        ctx.translate(handsOffset.lx, handsOffset.ly + 4);
+        // Golden round shield
+        ctx.fillStyle = '#8b6914';
+        ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2.5;
+        ctx.stroke();
+        // Inner detail
+        ctx.fillStyle = primaryColor;
+        ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+    } else {
+        // Assassin back hand: small dagger
+        ctx.save();
+        ctx.translate(handsOffset.lx, handsOffset.ly + 2);
+        ctx.rotate(-0.4);
+        ctx.fillStyle = accentColor;
+        ctx.beginPath();
+        ctx.moveTo(0, 0); ctx.lineTo(-4, -18); ctx.lineTo(4, -18);
+        ctx.closePath(); ctx.fill();
+        // Handle
+        ctx.fillStyle = '#222';
+        ctx.fillRect(-2, 0, 4, 7);
+        ctx.restore();
+    }
+
+    // ── 2. DRAW BACK FOOT ──
+    ctx.fillStyle = darken(primaryColor, 0.45);
+    ctx.strokeStyle = darken(accentColor, 0.45);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(feetOffset.lx - 7, 34 + feetOffset.ly, 13, 8, 4);
+    ctx.fill(); ctx.stroke();
+
+    // ── 3. DRAW TORSO ──
+    ctx.fillStyle = primaryColor;
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    // Shield shape torso
+    ctx.roundRect(-14, -12, 28, 36, 6);
+    ctx.fill(); ctx.stroke();
+
+    // Chest detail
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(-10, -8, 20, 8);
+
+    // ── 4. DRAW FRONT FOOT ──
+    ctx.fillStyle = primaryColor;
+    ctx.strokeStyle = accentColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(feetOffset.rx - 7, 34 + feetOffset.ry, 13, 8, 4);
+    ctx.fill(); ctx.stroke();
+
+    // ── 5. DRAW HEAD ──
+    ctx.save();
+    ctx.translate(0, -28);
+
+    if (type === 'warrior') {
+        // Helmet head
+        ctx.fillStyle = primaryColor;
+        ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = accentColor; ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // Visor slit
+        ctx.fillStyle = '#0d1a2e';
+        ctx.fillRect(2, -3, 13, 5);
+
+        // Eye glow
+        ctx.fillStyle = '#80d0ff';
+        ctx.fillRect(7, -2, 5, 3);
+
+        // Plume (feathers)
+        ctx.fillStyle = '#d44000';
+        ctx.beginPath();
+        ctx.moveTo(-6, -13);
+        ctx.bezierCurveTo(-18, -25, -5, -34, -2, -36);
+        ctx.bezierCurveTo(-2, -26, 0, -20, -6, -13);
+        ctx.fill();
+    } else {
+        // Hooded head
+        ctx.fillStyle = '#4a1010';
+        ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Mask face opening shadow
+        ctx.fillStyle = '#100505';
+        ctx.beginPath();
+        ctx.arc(3, 1, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glowing red eyes
+        ctx.fillStyle = '#ff3333';
+        ctx.beginPath(); ctx.arc(4, -1, 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(8, -1, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+
+    // ── 6. DRAW FRONT HAND + WEAPON ──
+    ctx.save();
+    ctx.translate(handsOffset.rx, handsOffset.ry + 2);
+
+    if (isAttacking) {
+        ctx.rotate(weaponAngle);
+        ctx.scale(weaponScale, weaponScale);
+    }
+
+    if (type === 'warrior') {
+        // Big broadsword
+        // Blade
+        ctx.fillStyle = '#e8f0f8';
+        ctx.beginPath();
+        ctx.moveTo(-3, -8);
+        ctx.lineTo(-4, -46);
+        ctx.lineTo(0, -54);
+        ctx.lineTo(4, -46);
+        ctx.lineTo(3, -8);
+        ctx.closePath(); ctx.fill();
+        // Inner blade shine
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-1, -48, 2, 38);
+
+        // Crossguard
+        ctx.fillStyle = accentColor;
+        ctx.fillRect(-9, -8, 18, 5);
+
+        // Hilt
+        ctx.fillStyle = '#553311';
+        ctx.fillRect(-2.5, -3, 5, 9);
+    } else {
+        // Assassin primary dagger
+        ctx.save();
+        ctx.rotate(0.2);
+        // Blade
+        ctx.fillStyle = '#b0c0d0';
+        ctx.beginPath();
+        ctx.moveTo(-3, 0); ctx.lineTo(-3, -26); ctx.lineTo(0, -32); ctx.lineTo(3, -26); ctx.lineTo(3, 0);
+        ctx.closePath(); ctx.fill();
+        // Red glowing center line
+        ctx.fillStyle = '#ff3333';
+        ctx.fillRect(-0.5, -28, 1, 24);
+        // Guard
+        ctx.fillStyle = accentColor;
+        ctx.fillRect(-6, 0, 12, 3.5);
+        // Hilt
+        ctx.fillStyle = '#222';
+        ctx.fillRect(-2, 3.5, 4, 7);
+        ctx.restore();
+    }
+
+    ctx.restore(); // end front hand
+
+    // ── 7. ATTACK SLASH TRAIL (Visual effect during active hits) ──
+    if (isAttacking) {
+        const sk = SKILL_DEFS[activeSkill.id];
+        const progress = activeSkill.frame / sk.duration;
+        if (progress > 0.2 && progress < 0.7 && sk.hitboxW > 0) {
+            ctx.save();
+            ctx.strokeStyle = sk.color + 'aa';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.arc(0, 0, 48, -0.6, 1.2);
+            ctx.stroke();
+            ctx.strokeStyle = '#ffffffaa';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, 48, -0.4, 1.0);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    ctx.restore(); // end flip & translate
+}
+
+// ── Draw wrapper for main battle ───────────────────────────
 function drawChar(ctx, char) {
-    const x = char.x, y = char.y + char.idleBob, w = char.width, h = char.height;
+    const x = char.x, y = char.y, w = char.width, h = char.height;
+
+    // Hurt flash / blink
+    let renderPrimary = char.primaryColor;
+    let renderAccent = char.accentColor;
+
+    if (char.hurtFrames > 0 && char.animTimer % 6 < 3) {
+        renderPrimary = '#ffffff';
+        renderAccent = '#ffffff';
+    }
 
     // Shadow on ground
     const aH = GROUND_Y - char.feetY;
     const sc = Math.max(0.15, 1 - aH / 280);
     ctx.beginPath();
-    ctx.ellipse(char.centerX, GROUND_Y - 3, w * 0.38 * sc, 6 * sc, 0, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(0,0,0,${Math.max(0.04, 0.22 * sc)})`; ctx.fill();
+    ctx.ellipse(char.centerX, GROUND_Y - 3, w * 0.44 * sc, 6 * sc, 0, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(0,0,0,${Math.max(0.04, 0.25 * sc)})`; ctx.fill();
 
-    // Hurt blink (white flash)
-    if (char.hurtFrames > 0 && char.animTimer % 6 < 3) {
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = char.accentColor; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
-        return;
+    // Invincible shimmer indicator
+    if (char.invincibleFrames > 0) {
+        ctx.save();
+        ctx.shadowColor = '#9b59b6';
+        ctx.shadowBlur = 15;
     }
 
-    // Body
-    ctx.fillStyle = char.primaryColor; ctx.fillRect(x, y, w, h);
+    // Call Segmented Draw
+    drawSegmentedChar(
+        ctx,
+        char.type,
+        char.state,
+        char.animTimer,
+        char.stepTimer,
+        char.activeSkill,
+        char.facingRight,
+        renderPrimary,
+        renderAccent,
+        x, y, w, h
+    );
 
-    // Status tints
+    if (char.invincibleFrames > 0) {
+        ctx.restore();
+    }
+
+    // Status tints / indicators
     if (char.poison) {
-        ctx.fillStyle = 'rgba(46,204,113,0.25)'; ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = 'rgba(46,204,113,0.18)';
+        ctx.beginPath(); ctx.roundRect(char.x, char.y, char.width, char.height, 8); ctx.fill();
     }
     if (char.buffs.damage) {
-        ctx.fillStyle = 'rgba(255,68,0,0.3)'; ctx.fillRect(x, y, w, h);
-        // Fire particles periodically
-        if (Math.random() < 0.2) spawnHitParticles(x + Math.random()*w, y + Math.random()*h, '#ff4400', 0);
-    }
-
-    // Skill active flash
-    if (char.activeSkill) {
-        const sk = SKILL_DEFS[char.activeSkill.id];
-        const fr = char.activeSkill.frame;
-        if (fr >= sk.activeStart && fr <= sk.activeEnd && sk.hitboxW > 0) {
-            ctx.fillStyle = sk.color + '50'; ctx.fillRect(x, y, w, h);
+        if (Math.random() < 0.22) {
+            spawnHitParticles(char.centerX + (Math.random()-0.5)*w, char.y + Math.random()*h, '#ff5500', 2);
         }
     }
 
-    // Invincible shimmer
-    if (char.invincibleFrames > 0) {
-        ctx.fillStyle = `rgba(155,89,182,${0.3 * Math.sin(char.animTimer * 0.3) + 0.3})`;
-        ctx.fillRect(x, y, w, h);
-    }
-
-    // Outline
-    ctx.strokeStyle = char.accentColor; ctx.lineWidth = 2.5;
-    ctx.strokeRect(x, y, w, h);
-
-    // Facing arrow
-    const dir = char.facingRight ? 1 : -1;
-    const ax  = char.centerX + dir * w * 0.22;
-    ctx.fillStyle = char.accentColor;
-    ctx.beginPath();
-    ctx.moveTo(ax, y - 11); ctx.lineTo(ax - dir*9, y - 2); ctx.lineTo(ax + dir*9, y - 2);
-    ctx.closePath(); ctx.fill();
-
-    // Stagger indicator
+    // Stagger star indicator
     if (char.staggerFrames > 0) {
-        ctx.font = '14px Inter'; ctx.textAlign = 'center'; ctx.fillStyle = '#ffff00';
-        ctx.fillText('★', char.centerX, y - 20);
+        ctx.fillStyle = '#ffea00'; ctx.font = 'bold 15px Inter'; ctx.textAlign = 'center';
+        ctx.fillText('★', char.centerX, char.y + char.idleBob - 16);
     }
 }
 
@@ -195,22 +485,27 @@ function drawHPBar(ctx, char, x, y, w, flip) {
     const barH = 22;
     const innerW = (w - 4) * pct;
 
-    // Background
-    ctx.fillStyle = '#1a1228'; ctx.beginPath(); ctx.roundRect(x, y, w, barH, 4); ctx.fill();
-    // HP color
+    // Background panel (Glassmorphism border)
+    ctx.fillStyle = 'rgba(15,10,25,0.78)';
+    ctx.beginPath(); ctx.roundRect(x, y, w, barH, 5); ctx.fill();
+
+    // HP color grading
     const hpColor = pct > 0.5 ? '#2ecc71' : pct > 0.25 ? '#f39c12' : '#e74c3c';
     ctx.fillStyle = hpColor;
     if (flip) ctx.fillRect(x + 2 + (w-4) - innerW, y + 2, innerW, barH - 4);
     else      ctx.fillRect(x + 2,                   y + 2, innerW, barH - 4);
-    // Border
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(x, y, w, barH, 4); ctx.stroke();
-    // HP text
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Inter'; ctx.textAlign = 'center';
+
+    // Border highlight
+    ctx.strokeStyle = char.accentColor; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(x, y, w, barH, 5); ctx.stroke();
+
+    // HP Text
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Inter, sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(`${Math.ceil(char.hp)} / ${char.maxHp}`, x + w/2, y + barH/2 + 4);
-    // Name
-    ctx.font = 'bold 13px Cinzel'; ctx.fillStyle = char.accentColor; ctx.textAlign = flip ? 'right' : 'left';
-    ctx.fillText(char.name, flip ? x + w : x, y - 5);
+
+    // Fighter Title Info
+    ctx.font = '900 15px Cinzel, serif'; ctx.fillStyle = char.accentColor; ctx.textAlign = flip ? 'right' : 'left';
+    ctx.fillText(char.name.toUpperCase(), flip ? x + w : x, y - 6);
 }
 
 function drawCooldowns(ctx, char, x, y, flip) {
@@ -227,47 +522,42 @@ function drawCooldowns(ctx, char, x, y, flip) {
         const by = y;
         const isActive = char.activeSkill?.id === sid;
 
-        // Box bg
-        ctx.fillStyle = '#0f0a20'; ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 4); ctx.fill();
+        ctx.fillStyle = 'rgba(10,5,20,0.85)'; ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 6); ctx.fill();
 
-        // Ready fill
         if (cd === 0) {
-            ctx.fillStyle = 'rgba(40,20,80,0.8)'; ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 4); ctx.fill();
+            ctx.fillStyle = 'rgba(120,60,255,0.18)'; ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 6); ctx.fill();
         }
 
-        // Cooldown overlay (top to bottom drain)
         if (cd > 0) {
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            const oH = boxH * cdPct;
-            ctx.fillRect(bx, by, boxW, oH);
+            ctx.fillStyle = 'rgba(0,0,0,0.65)';
+            ctx.fillRect(bx, by, boxW, boxH * cdPct);
         }
 
-        // Active glow
         if (isActive) {
             ctx.save(); ctx.shadowColor = sk.color; ctx.shadowBlur = 12;
-            ctx.strokeStyle = sk.color; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 4); ctx.stroke();
+            ctx.strokeStyle = sk.color; ctx.lineWidth = 2.5;
+            ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 6); ctx.stroke();
             ctx.restore();
         } else {
-            ctx.strokeStyle = cd === 0 ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)';
+            ctx.strokeStyle = cd === 0 ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)';
             ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 4); ctx.stroke();
+            ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 6); ctx.stroke();
         }
 
-        // Icon / key label
-        ctx.fillStyle = cd === 0 ? '#fff' : '#888';
+        // Icon
+        ctx.fillStyle = cd === 0 ? '#fff' : '#666';
         ctx.font = 'bold 18px Inter'; ctx.textAlign = 'center';
         ctx.fillText(sk.icon || sk.key, bx + boxW/2, by + boxH/2 + 6);
 
-        // Cooldown seconds
+        // Timer text overlay
         if (cd > 0) {
             ctx.fillStyle = '#fff'; ctx.font = 'bold 11px Inter';
             ctx.fillText(Math.ceil(cd/60)+'s', bx + boxW/2, by + boxH - 4);
         }
 
-        // Skill name tooltip on top
+        // Tooltip shortcut key
         ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '9px Inter';
-        ctx.fillText(sk.name.split(' ')[0], bx + boxW/2, by + boxH + 10);
+        ctx.fillText(sk.key, bx + boxW/2, by + boxH + 10);
     });
 }
 
@@ -275,200 +565,237 @@ function drawHUD(ctx, p1, p2, timerFrames, round, p1Wins, p2Wins) {
     const barW = 380;
     const barX1 = 30, barX2 = CANVAS_W - barX1 - barW;
 
-    // HP bars
     drawHPBar(ctx, p1, barX1, 12, barW, false);
     drawHPBar(ctx, p2, barX2, 12, barW, true);
 
-    // Cooldowns
     drawCooldowns(ctx, p1, barX1, 44, false);
     drawCooldowns(ctx, p2, barX2 + barW, 44, true);
 
-    // Timer
+    // Round / Timer Panel
     const secs = Math.ceil(timerFrames / 60);
-    ctx.font = `bold ${secs <= 10 ? 42 : 36}px Cinzel`;
+    ctx.fillStyle = 'rgba(15,10,25,0.7)';
+    ctx.beginPath(); ctx.roundRect(CANVAS_W/2 - 50, 10, 100, 52, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,60,255,0.4)'; ctx.stroke();
+
+    ctx.font = `bold ${secs <= 10 ? 30 : 26}px Cinzel, serif`;
     ctx.textAlign = 'center';
-    ctx.fillStyle = secs <= 10 ? '#ff4444' : '#ffffff';
-    ctx.shadowColor = secs <= 10 ? '#ff0000' : '#8855ff';
-    ctx.shadowBlur = 15;
-    ctx.fillText(secs, CANVAS_W / 2, 36);
-    ctx.shadowBlur = 0;
+    ctx.fillStyle = secs <= 10 ? '#ff3333' : '#ffffff';
+    ctx.fillText(secs, CANVAS_W / 2, 32);
 
-    // Round dots
-    ctx.font = 'bold 13px Inter';
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText(`Round ${round}`, CANVAS_W / 2, 56);
+    ctx.font = 'bold 11px Inter'; ctx.fillStyle = 'rgba(200,180,255,0.6)';
+    ctx.fillText(`ROUND ${round}`, CANVAS_W / 2, 50);
 
-    // Win dots (P1 left, P2 right of timer)
+    // Win Dots
     for (let i = 0; i < 2; i++) {
         const filled1 = i < p1Wins, filled2 = i < p2Wins;
-        const dx = 28;
-        ctx.beginPath();
-        ctx.arc(CANVAS_W/2 - 60 - i*dx, 38, 7, 0, Math.PI*2);
-        ctx.fillStyle = filled1 ? '#f0a500' : 'rgba(255,255,255,0.2)'; ctx.fill();
-        ctx.beginPath();
-        ctx.arc(CANVAS_W/2 + 60 + i*dx, 38, 7, 0, Math.PI*2);
-        ctx.fillStyle = filled2 ? '#ff6b6b' : 'rgba(255,255,255,0.2)'; ctx.fill();
+        const dx = 22;
+        ctx.beginPath(); ctx.arc(CANVAS_W/2 - 70 - i*dx, 34, 6, 0, Math.PI*2);
+        ctx.fillStyle = filled1 ? '#f0a500' : 'rgba(255,255,255,0.15)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(CANVAS_W/2 + 70 + i*dx, 34, 6, 0, Math.PI*2);
+        ctx.fillStyle = filled2 ? '#ff6b6b' : 'rgba(255,255,255,0.15)'; ctx.fill();
     }
-
-    // Key hints (small, bottom)
-    ctx.font = '11px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.textAlign = 'left';
-    ctx.fillText('P1: WASD move | F G H T skills', 14, CANVAS_H - 8);
-    ctx.textAlign = 'right';
-    ctx.fillText('P2: Arrows move | Num 1 2 3 4 skills', CANVAS_W - 14, CANVAS_H - 8);
 }
 
 // ── Loading Screen ───────────────────────────────────────────
 function drawLoading(ctx, progress, t) {
-    ctx.fillStyle = '#030310'; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-    title(ctx, 'HERO CLASH', CANVAS_W/2, CANVAS_H/2 - 50, 72, t);
+    // Deep galaxy gradient background
+    const bg = ctx.createRadialGradient(CANVAS_W/2, CANVAS_H/2, 40, CANVAS_W/2, CANVAS_H/2, 650);
+    bg.addColorStop(0, '#10062a');
+    bg.addColorStop(1, '#02020a');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-    // Progress bar
-    const bw = 400, bh = 8, bx = (CANVAS_W-bw)/2, by = CANVAS_H/2 + 20;
-    ctx.fillStyle = '#1a1228'; ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 4); ctx.fill();
-    ctx.fillStyle = '#8855ff'; ctx.beginPath(); ctx.roundRect(bx, by, bw*progress, bh, 4); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '14px Inter'; ctx.textAlign = 'center';
-    ctx.fillText('Loading…', CANVAS_W/2, by + 30);
+    updateMenuParticles();
+    drawMenuParticles(ctx);
+
+    // 3D Title
+    title(ctx, 'HERO CLASH', CANVAS_W/2, CANVAS_H/2 - 50, 80, t);
+
+    // Loading Bar
+    const bw = 400, bh = 8, bx = (CANVAS_W-bw)/2, by = CANVAS_H/2 + 30;
+    ctx.fillStyle = '#0a0518'; ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 4); ctx.fill();
+
+    const g = ctx.createLinearGradient(bx, by, bx + bw, by);
+    g.addColorStop(0, '#8855ff'); g.addColorStop(1, '#f0a500');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.roundRect(bx, by, bw*progress, bh, 4); ctx.fill();
+
+    ctx.fillStyle = 'rgba(200,180,255,0.5)'; ctx.font = '13px Inter, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(`Loading… ${Math.round(progress*100)}%`, CANVAS_W/2, by + 30);
 }
 
 // ── Main Menu ────────────────────────────────────────────────
 function drawMainMenu(ctx, mx, my, t) {
-    // Background
-    const bg = ctx.createRadialGradient(CANVAS_W/2, CANVAS_H/2, 50, CANVAS_W/2, CANVAS_H/2, 600);
-    bg.addColorStop(0,'#1a0a3a'); bg.addColorStop(1,'#030310');
+    const bg = ctx.createRadialGradient(CANVAS_W/2, CANVAS_H/2, 60, CANVAS_W/2, CANVAS_H/2, 650);
+    bg.addColorStop(0,'#12082e'); bg.addColorStop(1,'#020208');
     ctx.fillStyle = bg; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
 
-    title(ctx, '⚔  HERO CLASH  ⚔', CANVAS_W/2, 180, 68, t);
+    updateMenuParticles();
+    drawMenuParticles(ctx);
 
-    ctx.font = '16px Inter'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(200,180,255,0.55)';
-    ctx.fillText('2D Fighting Game — Use character skills to dominate your opponent', CANVAS_W/2, 240);
+    title(ctx, '⚔  HERO CLASH  ⚔', CANVAS_W/2, 180, 72, t);
+
+    ctx.font = '16px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(180,160,220,0.6)';
+    ctx.fillText('Experience fast-paced segmented combat inspired by Brawlhalla & bandit.rip', CANVAS_W/2, 240);
 
     const cx = CANVAS_W/2, bw = 240, bh = 54;
     const btns = {
-        play: btn(ctx,'▶  PLAY',  cx-bw/2, 290, bw, bh, isOver(mx,my, cx-bw/2,290,bw,bh), '#7744ee'),
-        shop: btn(ctx,'🛒  SHOP', cx-bw/2, 360, bw, bh, isOver(mx,my, cx-bw/2,360,bw,bh), '#d4ac0d'),
+        play: btn(ctx,'▶  PLAY',  cx-bw/2, 290, bw, bh, isOver(mx,my, cx-bw/2,290,bw,bh), '#8855ff'),
+        shop: btn(ctx,'🛒  SHOP', cx-bw/2, 360, bw, bh, isOver(mx,my, cx-bw/2,360,bw,bh), '#f0a500'),
     };
 
-    // Version
-    ctx.font='12px Inter'; ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.textAlign='center';
-    ctx.fillText('v1.0  |  P1: WASD+FGHT  |  P2: Arrows+Num1234', CANVAS_W/2, CANVAS_H-16);
+    ctx.font='11px Inter'; ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.textAlign='center';
+    ctx.fillText('P1: WASD + F,G,H,T  |  P2: ARROWS + Num 1,2,3,4', CANVAS_W/2, CANVAS_H-16);
 
     return btns;
 }
 
-// ── Character Select ─────────────────────────────────────────
+// ── Character Select (Giant Segmented Previews!) ────────────
 function drawCharSelect(ctx, sel, mx, my) {
-    ctx.fillStyle='#080618'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+    // Glassmorphism panels
+    ctx.fillStyle='#04020a'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
 
-    ctx.font='bold 32px Cinzel'; ctx.textAlign='center'; ctx.fillStyle='#c0a0ff';
-    ctx.fillText('SELECT YOUR FIGHTER', CANVAS_W/2, 46);
+    // Stars background
+    stars.forEach(s => {
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.size * 0.7, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(240,228,196,${s.base * 0.35})`; ctx.fill();
+    });
+
+    ctx.font='bold 30px Cinzel, serif'; ctx.textAlign='center'; ctx.fillStyle='#c0a0ff';
+    ctx.fillText('CHOOSE YOUR CHAMPION', CANVAS_W/2, 45);
 
     const chars  = Object.keys(CHAR_DEFS);
-    const sides  = [{ label:'P1', cx:CANVAS_W*0.25, color:'#f0a500' }, { label:'P2', cx:CANVAS_W*0.75, color:'#ff6b6b' }];
+    const sides  = [
+        { label:'PLAYER 1', cx:CANVAS_W*0.22, color:'#f0a500', selected: sel.p1 },
+        { label:'PLAYER 2 (AI)', cx:CANVAS_W*0.78, color:'#ff6b6b', selected: sel.p2 }
+    ];
 
     const btns = {};
 
     sides.forEach((side, pi) => {
-        const selected = pi === 0 ? sel.p1 : sel.p2;
+        ctx.font='900 13px Inter'; ctx.textAlign='center'; ctx.fillStyle=side.color;
+        ctx.fillText(side.label, side.cx, 80);
 
-        ctx.font='bold 14px Inter'; ctx.textAlign='center'; ctx.fillStyle=side.color;
-        ctx.fillText(`PLAYER ${pi+1}`, side.cx, 82);
+        // Giant animated preview on the side
+        if (side.selected) {
+            const sk = SKINS[side.selected][getEquipped(side.selected)];
+            const pX = side.cx - (side.selected === 'warrior' ? 29 : 22)*2.2;
+            const pY = 110;
+            // Draw Giant Character Preview (scale = 2.2)
+            drawSegmentedChar(
+                ctx,
+                side.selected,
+                'idle',
+                Date.now() / 16,
+                0,
+                null,
+                pi === 0, // P1 faces right, P2 faces left
+                sk.primary,
+                sk.accent,
+                pX, pY,
+                CHAR_DEFS[side.selected].width,
+                CHAR_DEFS[side.selected].height,
+                2.2
+            );
 
-        // Character cards
-        chars.forEach((ctype, ci) => {
-            const def = CHAR_DEFS[ctype];
-            const skin = SKINS[ctype][getEquipped(ctype)];
-            const cardW=220, cardH=160;
-            const cx = side.cx - cardW/2 + (ci - chars.length/2 + 0.5)*240;
-            const cy = 110;
-            const hover = isOver(mx, my, cx, cy, cardW, cardH);
-            const isSelected = selected === ctype;
+            // Display Title & Bio details
+            const def = CHAR_DEFS[side.selected];
+            ctx.font='900 22px Cinzel'; ctx.fillStyle='#fff';
+            ctx.fillText(def.name, side.cx, 320);
+            ctx.font='italic 12px Inter'; ctx.fillStyle='rgba(200,180,255,0.7)';
+            ctx.fillText(def.title, side.cx, 338);
 
-            ctx.fillStyle = isSelected ? 'rgba(120,60,255,0.35)' : hover ? 'rgba(80,40,160,0.25)' : 'rgba(20,10,40,0.7)';
-            ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 8); ctx.fill();
-            ctx.strokeStyle = isSelected ? side.color : hover ? 'rgba(120,60,255,0.6)' : 'rgba(80,50,120,0.4)';
-            ctx.lineWidth = isSelected ? 2.5 : 1.5;
-            ctx.beginPath(); ctx.roundRect(cx, cy, cardW, cardH, 8); ctx.stroke();
-
-            // Character preview (rectangle)
-            const cw=def.width*0.7, ch=def.height*0.7, pcx=cx+cardW/2, pcy=cy+80;
-            ctx.fillStyle = skin.primary; ctx.fillRect(pcx-cw/2, pcy-ch/2, cw, ch);
-            ctx.strokeStyle = skin.accent; ctx.lineWidth=2; ctx.strokeRect(pcx-cw/2, pcy-ch/2, cw, ch);
-
-            ctx.font='bold 16px Cinzel'; ctx.textAlign='center'; ctx.fillStyle='#fff';
-            ctx.fillText(def.name, cx+cardW/2, cy+140);
-            ctx.font='11px Inter'; ctx.fillStyle='rgba(200,180,255,0.6)';
-            ctx.fillText(def.title, cx+cardW/2, cy+158);
-
-            if (!btns[`p${pi+1}`]) btns[`p${pi+1}`] = {};
-            btns[`p${pi+1}`][ctype] = { x:cx, y:cy, w:cardW, h:cardH };
-        });
-
-        // Selected character info
-        if (selected) {
-            const def = CHAR_DEFS[selected];
-            ctx.font='13px Inter'; ctx.textAlign='center';
-            ctx.fillStyle='rgba(200,180,255,0.7)';
-            def.desc.split('\n').forEach((line, li) => ctx.fillText(line, side.cx, 295 + li*18));
-
-            // Skills list
-            ctx.font='bold 11px Inter'; ctx.fillStyle='rgba(255,255,255,0.5)';
-            ctx.fillText('SKILLS:', side.cx, 345);
+            // Skills details layout
+            ctx.font='bold 11px Inter'; ctx.fillStyle=side.color;
+            ctx.fillText('SKILLSET:', side.cx, 365);
             def.skills.forEach((sid, si) => {
-                const sk = SKILL_DEFS[sid];
-                ctx.fillStyle = sk.color; ctx.font='11px Inter';
-                ctx.fillText(`${sk.icon} ${sk.name}: ${sk.desc}`, side.cx, 362 + si*14);
+                const sinfo = SKILL_DEFS[sid];
+                ctx.fillStyle='#fff'; ctx.font='11px Inter'; ctx.textAlign='center';
+                ctx.fillText(`${sinfo.icon} ${sinfo.name} — ${sinfo.desc}`, side.cx, 382 + si*15);
             });
         }
+
+        // Selection Cards for choices (centered)
+        chars.forEach((ctype, ci) => {
+            const def = CHAR_DEFS[ctype];
+            const cardW = 120, cardH = 50;
+            // Place choices towards the center
+            const cardX = CANVAS_W/2 - cardW/2 + (pi === 0 ? -70 : 70);
+            const cardY = 110 + ci * 60;
+            const hovered = isOver(mx, my, cardX, cardY, cardW, cardH);
+            const isSel = side.selected === ctype;
+
+            ctx.fillStyle = isSel ? side.color + '33' : hovered ? 'rgba(120,60,255,0.2)' : 'rgba(20,10,40,0.6)';
+            ctx.beginPath(); ctx.roundRect(cardX, cardY, cardW, cardH, 6); ctx.fill();
+            ctx.strokeStyle = isSel ? side.color : hovered ? 'rgba(120,60,255,0.5)' : 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = isSel ? 2 : 1;
+            ctx.beginPath(); ctx.roundRect(cardX, cardY, cardW, cardH, 6); ctx.stroke();
+
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 14px Cinzel'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(def.name, cardX + cardW/2, cardY + cardH/2);
+
+            if (!btns[`p${pi+1}`]) btns[`p${pi+1}`] = {};
+            btns[`p${pi+1}`][ctype] = { x: cardX, y: cardY, w: cardW, h: cardH };
+        });
     });
 
-    // Difficulty
-    ctx.font='bold 14px Inter'; ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,0.6)';
-    ctx.fillText('DIFFICULTY (vs AI)', CANVAS_W/2, 290);
+    // Glassmorphism panels for Difficulty & Map selection
+    const panelX = CANVAS_W/2 - 190, panelY = 250, panelW = 380, panelH = 175;
+    ctx.fillStyle = 'rgba(15,10,35,0.6)';
+    ctx.beginPath(); ctx.roundRect(panelX, panelY, panelW, panelH, 10); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,60,255,0.2)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(panelX, panelY, panelW, panelH, 10); ctx.stroke();
+
+    // ── Difficulty ──
+    ctx.font='bold 12px Inter'; ctx.fillStyle='rgba(200,180,255,0.7)'; ctx.textAlign='center';
+    ctx.fillText('DIFFICULTY (vs CPU)', CANVAS_W/2, panelY + 20);
     const diffs = ['easy','medium','hard'];
     diffs.forEach((d, di) => {
-        const dw=120,dh=38, dx=CANVAS_W/2-180+di*190, dy=300;
+        const dw=100, dh=30, dx=CANVAS_W/2-155+di*110, dy=panelY + 34;
         const isSelD = sel.difficulty === d;
-        const hov    = isOver(mx,my,dx,dy,dw,dh);
-        const dc     = d==='easy'?'#2ecc71':d==='medium'?'#f39c12':'#e74c3c';
-        ctx.fillStyle = isSelD?dc+'55':hov?dc+'33':'rgba(30,20,50,0.7)';
-        ctx.beginPath(); ctx.roundRect(dx,dy,dw,dh,6); ctx.fill();
-        ctx.strokeStyle = isSelD?dc:hov?dc+'88':'rgba(100,80,140,0.4)'; ctx.lineWidth=1.5;
-        ctx.beginPath(); ctx.roundRect(dx,dy,dw,dh,6); ctx.stroke();
-        ctx.fillStyle='#fff'; ctx.font='bold 14px Inter';
-        ctx.fillText(AI_DIFFS[d].label, dx+dw/2, dy+dh/2+5);
+        const hov = isOver(mx,my,dx,dy,dw,dh);
+        const dc = d==='easy'?'#2ecc71':d==='medium'?'#f39c12':'#e74c3c';
+
+        ctx.fillStyle = isSelD ? dc+'44' : hov ? dc+'22' : 'rgba(25,15,40,0.5)';
+        ctx.beginPath(); ctx.roundRect(dx,dy,dw,dh,5); ctx.fill();
+        ctx.strokeStyle = isSelD ? dc : hov ? dc+'66' : 'rgba(255,255,255,0.1)';
+        ctx.beginPath(); ctx.roundRect(dx,dy,dw,dh,5); ctx.stroke();
+
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Inter';
+        ctx.fillText(AI_DIFFS[d].label, dx+dw/2, dy+dh/2+4);
         btns[`diff_${d}`] = {x:dx,y:dy,w:dw,h:dh};
     });
 
-    // Map select
-    ctx.font='bold 14px Inter'; ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,0.6)';
-    ctx.fillText('MAP', CANVAS_W/2, 365);
-    MAPS.forEach((map,mi) => {
-        const mw=130,mh=32,mx2=CANVAS_W/2-280+mi*150,my2=372;
-        const isSelM = sel.mapId===map.id;
-        const hov    = isOver(mx,my,mx2,my2,mw,mh);
-        ctx.fillStyle = isSelM?'rgba(120,60,255,0.4)':hov?'rgba(80,40,160,0.25)':'rgba(20,10,40,0.7)';
-        ctx.beginPath(); ctx.roundRect(mx2,my2,mw,mh,5); ctx.fill();
-        ctx.strokeStyle=isSelM?'#8855ff':hov?'rgba(120,60,255,0.5)':'rgba(80,50,120,0.3)'; ctx.lineWidth=1.5;
-        ctx.beginPath(); ctx.roundRect(mx2,my2,mw,mh,5); ctx.stroke();
-        ctx.fillStyle='#fff'; ctx.font='12px Inter'; ctx.fillText(map.name, mx2+mw/2, my2+mh/2+4);
-        btns[`map_${map.id}`]={x:mx2,y:my2,w:mw,h:mh};
+    // ── Maps ──
+    ctx.font='bold 12px Inter'; ctx.fillStyle='rgba(200,180,255,0.7)'; ctx.fillText('STAGE SELECT', CANVAS_W/2, panelY + 95);
+    MAPS.forEach((map, mi) => {
+        const mw=80, mh=28, mx2=CANVAS_W/2-170+mi*88, my2=panelY + 110;
+        const isSelM = sel.mapId === map.id;
+        const hov = isOver(mx,my,mx2,my2,mw,mh);
+
+        ctx.fillStyle = isSelM ? 'rgba(136,85,255,0.35)' : hov ? 'rgba(136,85,255,0.15)' : 'rgba(25,15,40,0.5)';
+        ctx.beginPath(); ctx.roundRect(mx2,my2,mw,mh,4); ctx.fill();
+        ctx.strokeStyle = isSelM ? '#8855ff' : hov ? 'rgba(136,85,255,0.5)' : 'rgba(255,255,255,0.1)';
+        ctx.beginPath(); ctx.roundRect(mx2,my2,mw,mh,4); ctx.stroke();
+
+        ctx.fillStyle = '#fff'; ctx.font = '10px Inter';
+        ctx.fillText(map.name.split(' ')[0], mx2+mw/2, my2+mh/2+3);
+        btns[`map_${map.id}`] = {x:mx2,y:my2,w:mw,h:mh};
     });
 
-    // Ready button (if both selected)
+    // Fight Action
     if (sel.p1 && sel.p2) {
-        const rx=CANVAS_W/2-130,ry=430,rw=260,rh=52;
-        btns.ready = btn(ctx,'⚔  FIGHT!',rx,ry,rw,rh,isOver(mx,my,rx,ry,rw,rh),'#f0a500');
+        const rx=CANVAS_W/2-110, ry=440, rw=220, rh=46;
+        btns.ready = btn(ctx,'⚔  START DUEL', rx,ry,rw,rh, isOver(mx,my,rx,ry,rw,rh), '#f0a500');
     }
-    // Back
-    btns.back = btn(ctx,'← Back', 20, CANVAS_H-54, 100,38, isOver(mx,my,20,CANVAS_H-54,100,38),'#555');
 
+    btns.back = btn(ctx,'← Back', 20, CANVAS_H-52, 100, 36, isOver(mx,my,20,CANVAS_H-52,100,36), '#555');
     return btns;
 }
 
 // ── Round End overlay ────────────────────────────────────────
 function drawRoundEnd(ctx, winnerLabel, winnerColor, round) {
-    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
-    ctx.font='bold 52px Cinzel'; ctx.textAlign='center';
+    ctx.fillStyle='rgba(2,2,8,0.65)'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+    ctx.font='bold 52px Cinzel, serif'; ctx.textAlign='center';
     ctx.fillStyle=winnerColor; ctx.shadowColor=winnerColor; ctx.shadowBlur=30;
     ctx.fillText(`Round ${round}`, CANVAS_W/2, CANVAS_H/2-30);
     ctx.font='bold 34px Cinzel'; ctx.fillStyle='#fff'; ctx.shadowBlur=0;
@@ -477,63 +804,61 @@ function drawRoundEnd(ctx, winnerLabel, winnerColor, round) {
 
 // ── Game Over ────────────────────────────────────────────────
 function drawGameOver(ctx, winnerLabel, winnerColor, p1Wins, p2Wins, goldEarned, mx, my) {
-    ctx.fillStyle='rgba(0,0,0,0.8)'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+    ctx.fillStyle='rgba(3,2,10,0.85)'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
 
-    ctx.font='bold 58px Cinzel'; ctx.textAlign='center';
+    ctx.font='bold 58px Cinzel, serif'; ctx.textAlign='center';
     ctx.fillStyle=winnerColor; ctx.shadowColor=winnerColor; ctx.shadowBlur=30;
-    ctx.fillText('⚔ VICTORY ⚔', CANVAS_W/2, 180);
+    ctx.fillText('⚔ VICTORY ⚔', CANVAS_W/2, 170);
 
     ctx.font='bold 32px Cinzel'; ctx.fillStyle='#fff'; ctx.shadowBlur=0;
-    ctx.fillText(winnerLabel, CANVAS_W/2, 240);
+    ctx.fillText(winnerLabel, CANVAS_W/2, 230);
 
-    ctx.font='24px Inter'; ctx.fillStyle='rgba(255,255,255,0.7)';
-    ctx.fillText(`Score: ${p1Wins} — ${p2Wins}`, CANVAS_W/2, 290);
+    ctx.font='22px Inter'; ctx.fillStyle='rgba(200,180,255,0.7)';
+    ctx.fillText(`Final Match Score: ${p1Wins} — ${p2Wins}`, CANVAS_W/2, 280);
 
     if (goldEarned > 0) {
-        ctx.font='bold 20px Inter'; ctx.fillStyle='#f0a500';
-        ctx.fillText(`+ ${goldEarned} Gold Earned!`, CANVAS_W/2, 330);
+        ctx.font='bold 22px Inter'; ctx.fillStyle='#f0a500';
+        ctx.fillText(`💰 + ${goldEarned} Gold Rewarded!`, CANVAS_W/2, 324);
     }
 
     const btns = {
-        again: btn(ctx,'▶ Play Again', CANVAS_W/2-260, 390, 240, 52, isOver(mx,my,CANVAS_W/2-260,390,240,52),'#7744ee'),
-        shop:  btn(ctx,'🛒 Shop',       CANVAS_W/2+20,  390, 240, 52, isOver(mx,my,CANVAS_W/2+20,390,240,52),'#d4ac0d'),
-        menu:  btn(ctx,'← Main Menu',  CANVAS_W/2-120, 460, 240, 42, isOver(mx,my,CANVAS_W/2-120,460,240,42),'#555'),
+        again: btn(ctx,'▶  Play Again', CANVAS_W/2-250, 380, 230, 50, isOver(mx,my,CANVAS_W/2-250,380,230,50),'#8855ff'),
+        shop:  btn(ctx,'🛒  Enter Shop', CANVAS_W/2+20,  380, 230, 50, isOver(mx,my,CANVAS_W/2+20,380,230,50),'#f0a500'),
+        menu:  btn(ctx,'← Main Menu',    CANVAS_W/2-110, 448, 220, 40, isOver(mx,my,CANVAS_W/2-110,448,220,40),'#555'),
     };
     return btns;
 }
 
-// ── Shop ─────────────────────────────────────────────────────
+// ── Shop Screen Redesign ─────────────────────────────────────
 function drawShop(ctx, shopState, mx, my) {
-    ctx.fillStyle='#080618'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+    ctx.fillStyle='#04020a'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
 
-    ctx.font='bold 36px Cinzel'; ctx.textAlign='center'; ctx.fillStyle='#f0a500';
-    ctx.fillText('🛒  SHOP', CANVAS_W/2, 50);
+    ctx.font='bold 36px Cinzel, serif'; ctx.textAlign='center'; ctx.fillStyle='#f0a500';
+    ctx.fillText('🛒  SKIN SHOP', CANVAS_W/2, 50);
 
-    ctx.font='bold 20px Inter'; ctx.fillStyle='#f0a500'; ctx.textAlign='center';
-    ctx.fillText(`💰 ${getGold()} Gold`, CANVAS_W/2, 82);
+    ctx.font='bold 18px Inter'; ctx.fillStyle='#ffd700'; ctx.textAlign='center';
+    ctx.fillText(`💰 Balance: ${getGold()} Gold`, CANVAS_W/2, 82);
 
-    // Char tabs
     const tabs  = Object.keys(CHAR_DEFS);
     const btns  = {};
     tabs.forEach((ctype, ti) => {
-        const tw=200, th=40, tx=CANVAS_W/2-220+ti*230, ty=104;
+        const tw=180, th=36, tx=CANVAS_W/2-190+ti*200, ty=104;
         const isActive = shopState.tab === ctype;
         const hov = isOver(mx,my,tx,ty,tw,th);
-        ctx.fillStyle = isActive?'rgba(120,60,255,0.4)':hov?'rgba(80,40,160,0.25)':'rgba(20,10,40,0.7)';
+        ctx.fillStyle = isActive?'rgba(136,85,255,0.35)':hov?'rgba(136,85,255,0.15)':'rgba(20,10,40,0.7)';
         ctx.beginPath(); ctx.roundRect(tx,ty,tw,th,6); ctx.fill();
-        ctx.strokeStyle=isActive?'#8855ff':'rgba(80,50,120,0.4)'; ctx.lineWidth=1.5;
+        ctx.strokeStyle=isActive?'#8855ff':'rgba(255,255,255,0.1)'; ctx.lineWidth=1.5;
         ctx.beginPath(); ctx.roundRect(tx,ty,tw,th,6); ctx.stroke();
-        ctx.fillStyle=isActive?'#fff':'rgba(200,180,255,0.6)'; ctx.font='bold 16px Cinzel'; ctx.textAlign='center';
+        ctx.fillStyle=isActive?'#fff':'rgba(200,180,255,0.6)'; ctx.font='bold 15px Cinzel'; ctx.textAlign='center';
         ctx.fillText(CHAR_DEFS[ctype].name, tx+tw/2, ty+th/2+5);
         btns[`tab_${ctype}`]={x:tx,y:ty,w:tw,h:th};
     });
 
-    // Skin grid
     const skins  = SKINS[shopState.tab];
     const equipped = getEquipped(shopState.tab);
     skins.forEach((sk, si) => {
         const cols = 2;
-        const cardW=240, cardH=160, pad=30;
+        const cardW=260, cardH=160, pad=30;
         const col=si%cols, row=Math.floor(si/cols);
         const cx=CANVAS_W/2-cardW-pad/2+col*(cardW+pad);
         const cy=168+row*(cardH+20);
@@ -541,45 +866,58 @@ function drawShop(ctx, shopState, mx, my) {
         const isEq  = equipped===si;
         const hov   = isOver(mx,my,cx,cy,cardW,cardH);
 
-        ctx.fillStyle = isEq?'rgba(100,50,200,0.4)':hov?'rgba(60,30,120,0.3)':'rgba(20,10,40,0.7)';
+        ctx.fillStyle = isEq?'rgba(136,85,255,0.25)':hov?'rgba(136,85,255,0.1)':'rgba(15,10,30,0.6)';
         ctx.beginPath(); ctx.roundRect(cx,cy,cardW,cardH,8); ctx.fill();
-        ctx.strokeStyle=isEq?sk.accent:owned?'rgba(100,80,140,0.5)':'rgba(60,40,80,0.3)'; ctx.lineWidth=isEq?2:1;
+        ctx.strokeStyle=isEq?sk.accent:owned?'rgba(255,255,255,0.15)':'rgba(255,255,255,0.05)'; ctx.lineWidth=isEq?2.5:1;
         ctx.beginPath(); ctx.roundRect(cx,cy,cardW,cardH,8); ctx.stroke();
 
-        // Preview box
-        const pw=50,ph=70,px2=cx+30,py2=cy+45;
-        ctx.fillStyle=sk.primary; ctx.fillRect(px2,py2,pw,ph);
-        ctx.strokeStyle=sk.accent; ctx.lineWidth=2; ctx.strokeRect(px2,py2,pw,ph);
+        // Premium skin preview drawing (using new segmented system)
+        const pX = cx + 18;
+        const pY = cy + 30;
+        drawSegmentedChar(
+            ctx,
+            shopState.tab,
+            'idle',
+            Date.now() / 16 + si * 20,
+            0,
+            null,
+            true, // Always face right in preview card
+            sk.primary,
+            sk.accent,
+            pX, pY,
+            CHAR_DEFS[shopState.tab].width,
+            CHAR_DEFS[shopState.tab].height,
+            1.1
+        );
 
-        ctx.font='bold 15px Inter'; ctx.textAlign='left'; ctx.fillStyle='#fff';
-        ctx.fillText(sk.name, cx+95, cy+55);
+        ctx.font='bold 15px Cinzel'; ctx.textAlign='left'; ctx.fillStyle='#fff';
+        ctx.fillText(sk.name, cx+95, cy+50);
 
         if (isEq) {
-            ctx.font='bold 12px Inter'; ctx.fillStyle=sk.accent;
+            ctx.font='bold 11px Inter'; ctx.fillStyle=sk.accent;
             ctx.fillText('✓ EQUIPPED', cx+95, cy+78);
         } else if (owned) {
             const eb=btn(ctx,'Equip',cx+95,cy+70,110,30,hov,sk.accent);
             btns[`equip_${shopState.tab}_${si}`]={x:cx+95,y:cy+70,w:110,h:30};
         } else {
             const canAfford = getGold()>=sk.price;
-            const eb=btn(ctx,`Buy ${sk.price}g`,cx+95,cy+70,130,30,hov&&canAfford, canAfford?'#f0a500':'#666');
+            const eb=btn(ctx,`Buy ${sk.price}g`,cx+95,cy+70,130,30,hov&&canAfford, canAfford?'#f0a500':'#444');
             if (canAfford) btns[`buy_${shopState.tab}_${si}`]={x:cx+95,y:cy+70,w:130,h:30};
-            if (!canAfford){ctx.font='11px Inter';ctx.fillStyle='rgba(255,100,100,0.7)';ctx.fillText('Not enough gold',cx+95,cy+108);}
         }
     });
 
-    btns.back = btn(ctx,'← Back', 20, CANVAS_H-54, 120,40, isOver(mx,my,20,CANVAS_H-54,120,40),'#555');
+    btns.back = btn(ctx,'← Back', 20, CANVAS_H-52, 100, 36, isOver(mx,my,20,CANVAS_H-52,100,36), '#555');
     return btns;
 }
 
 // ── Pause overlay ────────────────────────────────────────────
 function drawPaused(ctx, mx, my) {
-    ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
-    ctx.font='bold 52px Cinzel'; ctx.textAlign='center'; ctx.fillStyle='#fff';
+    ctx.fillStyle='rgba(2,1,5,0.7)'; ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+    ctx.font='bold 52px Cinzel, serif'; ctx.textAlign='center'; ctx.fillStyle='#fff';
     ctx.fillText('PAUSED', CANVAS_W/2, CANVAS_H/2-40);
     const btns = {
-        resume: btn(ctx,'▶ Resume',   CANVAS_W/2-130, CANVAS_H/2+10, 260,50, isOver(mx,my,CANVAS_W/2-130,CANVAS_H/2+10,260,50),'#7744ee'),
-        quit:   btn(ctx,'✕ Quit',     CANVAS_W/2-130, CANVAS_H/2+70, 260,50, isOver(mx,my,CANVAS_W/2-130,CANVAS_H/2+70,260,50),'#e74c3c'),
+        resume: btn(ctx,'▶ Resume Duel',   CANVAS_W/2-130, CANVAS_H/2+10, 260,46, isOver(mx,my,CANVAS_W/2-130,CANVAS_H/2+10,260,46),'#8855ff'),
+        quit:   btn(ctx,'✕ Return to Menu', CANVAS_W/2-130, CANVAS_H/2+68, 260,46, isOver(mx,my,CANVAS_W/2-130,CANVAS_H/2+68,260,46),'#e74c3c'),
     };
     return btns;
 }
